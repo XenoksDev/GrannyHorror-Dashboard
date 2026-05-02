@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#080808">
+  <title>Granny Stats</title>
+  <style>
+    :root {
+      --bg:      #080808;
+      --card:    #111111;
+      --border:  #222222;
+      --green:   #00e676;
+      --gold:    #ffc107;
+      --blue:    #64b5f6;
+      --purple:  #b39ddb;
+      --dim:     #666;
+      --text:    #f0f0f0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    header {
+      padding: 20px 20px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: space-between;
+    }
+    .map-info { display: flex; align-items: center; gap: 10px; }
+    .map-thumb {
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #222;
+      flex-shrink: 0;
+    }
+    .map-name { font-size: 13px; font-weight: 800; letter-spacing: .2px; }
+    .map-code { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+    .live-pill {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(0,230,118,.1);
+      border: 1px solid rgba(0,230,118,.2);
+      border-radius: 20px;
+      padding: 5px 11px;
+      font-size: 11px; font-weight: 700;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+    .live-dot {
+      width: 6px; height: 6px;
+      background: var(--green); border-radius: 50%;
+      animation: blink 1.8s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* ── MAIN CONTENT ───────────────────────── */
+    .page { padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; max-width: 480px; margin: 0 auto; }
+
+    /* ── HERO CARD ──────────────────────────── */
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 24px 22px;
+      text-align: center;
+    }
+    .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+    .hero-number { font-size: 80px; font-weight: 900; line-height: 1; color: var(--green); letter-spacing: -3px; }
+    .hero-sub { font-size: 12px; color: var(--dim); margin-top: 10px; }
+    .hero-peaks { display: flex; justify-content: center; gap: 24px; margin-top: 14px; }
+    .peak-item { text-align: center; }
+    .peak-item .pv { font-size: 20px; font-weight: 800; }
+    .peak-item .pl { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+    /* ── ROW 2 CARDS ────────────────────────── */
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── CARD ───────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .card-label { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+    .card-value { font-size: 32px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+    .card-sub { font-size: 11px; color: var(--dim); margin-top: 6px; line-height: 1.4; }
+    .card-sub strong { color: var(--text); font-weight: 600; }
+
+    .c-gold   { color: var(--gold); }
+    .c-purple { color: var(--purple); }
+    .c-blue   { color: var(--blue); }
+    .c-green  { color: var(--green); }
+
+    /* ── WIDE CARD ──────────────────────────── */
+    .card-wide {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px;
+    }
+    .total-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .total-big { font-size: 52px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+    .total-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      background: rgba(179,157,219,.15);
+      border: 1px solid rgba(179,157,219,.25);
+      color: var(--purple);
+      border-radius: 6px; padding: 3px 8px;
+      align-self: center;
+    }
+
+    /* ── MONTHLY CARD ───────────────────────── */
+    .monthly-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    /* Month navigation */
+    .month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .month-nav-title { font-size: 13px; font-weight: 800; color: var(--text); }
+    .month-btn {
+      background: var(--border);
+      border: none;
+      color: var(--text);
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .month-btn:disabled { opacity: .25; cursor: default; }
+
+    /* Month pills */
+    .month-pills {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      margin-bottom: 16px;
+      scrollbar-width: none;
+    }
+    .month-pills::-webkit-scrollbar { display: none; }
+    .month-pill {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      transition: all .15s;
+    }
+    .month-pill.active {
+      background: rgba(0,230,118,.12);
+      border-color: rgba(0,230,118,.3);
+      color: var(--green);
+    }
+    .month-pill.future { opacity: .3; cursor: default; }
+
+    /* Bar chart */
+    .bar-chart-wrap { position: relative; height: 170px; margin-bottom: 4px; }
+    .bar-chart-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; cursor: crosshair; }
+
+    /* Tooltip */
+    #chart-tooltip {
+      position: fixed;
+      pointer-events: none;
+      display: none;
+      background: #1c1c1c;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 9px 13px;
+      z-index: 999;
+      min-width: 110px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.6);
+    }
+    .tt-day   { font-size: 10px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+    .tt-val   { font-size: 20px; font-weight: 900; color: #ffc107; line-height: 1; }
+    .tt-label { font-size: 10px; color: #555; margin-top: 3px; }
+
+    /* Monthly summary */
+    .monthly-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .msumm {
+      background: #181818;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .msumm .ml { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+    .msumm .mv { font-size: 22px; font-weight: 900; }
+
+    /* Loading bar chart */
+    .chart-loading { height: 120px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 12px; }
+
+    /* ── LINK BUTTON ────────────────────────── */
+    .link-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      color: var(--blue);
+      font-size: 13px; font-weight: 700;
+      text-decoration: none;
+    }
+
+    /* ── NOTIF BANNER ───────────────────────── */
+    .notif-banner {
+      background: rgba(0,230,118,.08);
+      border: 1px solid rgba(0,230,118,.2);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--green);
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer;
+    }
+    .notif-banner.hidden { display: none; }
+
+    /* ── FOOTER ─────────────────────────────── */
+    .footer { text-align: center; font-size: 10px; color: #333; padding-top: 4px; }
+
+    /* ── LOADING / ERROR ────────────────────── */
+    .loading { padding: 80px 20px; text-align: center; color: var(--dim); font-size: 13px; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2.5px solid #222;
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: #110808; border: 1px solid #3a1111;
+      border-radius: 14px; padding: 20px; text-align: center;
+      color: #ef5350; font-size: 13px; line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="map-info">
+    <img class="map-thumb"
+         src="https://cdn-0001.qstv.on.epicgames.com/glnukYzSdizuXhteXl/image/landscape_comp.jpeg"
+         onerror="this.src='https://fortnite.gg/img/items/52/icon.jpg?1'" alt="">
+    <div>
+      <div class="map-name">SURVIVE GRANNY</div>
+      <div class="map-code">4482-9358-0065</div>
+    </div>
+  </div>
+  <div class="live-pill"><div class="live-dot"></div>LIVE</div>
+</header>
+
+<div class="page" id="page">
+  <div class="loading"><div class="spinner"></div>Chargement…</div>
+</div>
+
+<div id="chart-tooltip">
+  <div class="tt-day"></div>
+  <div class="tt-val"></div>
+  <div class="tt-label"></div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────
+const ISLAND_ID  = 519527;
+const ISLAND_URL = 'https://fortnite.gg/island/4482-9358-0065';
+const API_ISLAND = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
+const API_GRAPH  = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
+const API_YEAR   = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
+const PROXY      = 'https://api.allorigins.win/get?url=';
+const PROXY2     = 'https://corsproxy.io/?';
+const REFRESH_MS = 60_000;
+
+const RATE       = 1 / 1000;   // $1 per 1000 player-minutes
+const MULTIPLIER = 2.7;        // ×2.7 (playtime + transactions)
+const MILESTONES = [50, 100, 150, 200, 250, 300, 350, 400, 500];
+
+const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+
+// ── STATE ─────────────────────────────────────────────
+let yearlyDays      = null;
+let notifPermission = Notification?.permission ?? 'default';
+// Paris date for initial state
+const _p = new Intl.DateTimeFormat('en-US', { timeZone:'Europe/Paris', year:'numeric', month:'numeric' }).formatToParts(new Date());
+let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
+let selectedYear  = parseInt(_p.find(x => x.type === 'year').value);
+
+// ── FETCH ─────────────────────────────────────────────
+async function getJSON(url) {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (r.ok) return r.json();
+  } catch (_) {}
+  try {
+    const r = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(9000) });
+    if (r.ok) { const w = await r.json(); return JSON.parse(w.contents); }
+  } catch (_) {}
+  const r = await fetch(PROXY2 + encodeURIComponent(url), { signal: AbortSignal.timeout(9000) });
+  return r.json();
+}
+
+async function getText(url) {
+  try {
+    const r = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(11000) });
+    if (r.ok) { const w = await r.json(); return w.contents; }
+  } catch (_) {}
+  const r = await fetch(PROXY2 + encodeURIComponent(url), { signal: AbortSignal.timeout(11000) });
+  return r.text();
+}
+
+// ── PARSE HTML ────────────────────────────────────────
+function parseK(str) {
+  if (!str) return 0;
+  const n = parseFloat(str);
+  if (str.endsWith('M')) return Math.round(n * 1_000_000);
+  if (str.endsWith('K')) return Math.round(n * 1_000);
+  return Math.round(n);
+}
+
+function parseHTML(html) {
+  if (!html) return {};
+  // Use id-anchored patterns on raw HTML — much more reliable than text-stripped regex
+  const minutesM = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_ccu"/);
+  const allPeakM = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-peak"/);
+  const favM     = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_favorites"/);
+  return {
+    totalMinutes: parseK(minutesM?.[1]),
+    allTimePeak:  allPeakM?.[1]?.trim() ?? null,
+    favorites:    favM?.[1]?.trim() ?? null,
+  };
+}
+
+// ── PARIS TIMEZONE HELPERS ────────────────────────────
+function parisNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', hour12: false,
+  }).formatToParts(new Date());
+  const g = t => parseInt(parts.find(p => p.type === t).value);
+  return { year: g('year'), month: g('month') - 1, day: g('day'), hour: g('hour'), minute: g('minute') };
+}
+
+function toParisParts(tsMs) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(new Date(tsMs));
+  const g = t => parseInt(parts.find(p => p.type === t).value);
+  return { year: g('year'), month: g('month') - 1, day: g('day') };
+}
+
+function parisTimeStr() {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit',
+  }).format(new Date());
+}
+
+// ── AGGREGATE YEARLY DATA BY DAY (Paris TZ) ───────────
+function aggregateByDay(graphData) {
+  const { start, step, values_avg, values } = graphData.data;
+  const avgs = values_avg ?? values ?? [];
+  const days = {};
+
+  avgs.forEach((avg, i) => {
+    const ts  = (start + i * step) * 1000;
+    const { year, month, day } = toParisParts(ts);
+    const key = `${year}-${month}-${day}`;
+    if (!days[key]) days[key] = { year, month, day, minutes: 0 };
+    days[key].minutes += avg * (step / 60);
+  });
+
+  return Object.values(days).sort((a, b) =>
+    new Date(a.year, a.month, a.day) - new Date(b.year, b.month, b.day)
+  );
+}
+
+function getDaysForMonth(year, month) {
+  return (yearlyDays ?? []).filter(d => d.year === year && d.month === month);
+}
+
+function earningForDay(dayData) {
+  return dayData.minutes / 1000 * MULTIPLIER;
+}
+
+// ── MONEY FORMAT ──────────────────────────────────────
+function money(dollars) {
+  if (dollars >= 1000) return '$' + (dollars / 1000).toFixed(2) + 'K';
+  return '$' + dollars.toFixed(2);
+}
+function fmt(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+
+// ── BAR CHART ENGINE ──────────────────────────────────
+let _chartBars    = [];
+let _chartCanvas  = null;
+let _chartHovered = -1;
+let _barRects     = []; // { x, w } per bar for hit-testing
+
+function _niceScale(max) {
+  const steps = [0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500];
+  for (const s of steps) if (max / s <= 5) return s;
+  return Math.ceil(max / 5);
+}
+
+function _drawBars(highlightIdx) {
+  const canvas = _chartCanvas;
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas._init) {
+    canvas.width  = canvas.offsetWidth  * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    canvas._init  = true;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W      = canvas.offsetWidth;
+  const H      = canvas.offsetHeight;
+  const LABEL  = 18;
+  const LEFT   = 36; // y-axis label space
+  const chartW = W - LEFT;
+  const chartH = H - LABEL;
+  const bars   = _chartBars;
+  const n      = bars.length;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const maxE    = Math.max(...bars.map(b => b.earnings), 0.01);
+  const scale   = _niceScale(maxE);
+  const gridMax = Math.ceil(maxE / scale) * scale;
+
+  // ── Grid lines + Y labels
+  const gridCount = Math.min(4, Math.ceil(gridMax / scale));
+  for (let g = 0; g <= gridCount; g++) {
+    const val = (g / gridCount) * gridMax;
+    const y   = chartH - (val / gridMax) * (chartH - 6);
+    ctx.strokeStyle = g === 0 ? '#2a2a2a' : '#1e1e1e';
+    ctx.lineWidth   = g === 0 ? 1.5 : 1;
+    ctx.setLineDash(g === 0 ? [] : [3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(LEFT, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (g > 0) {
+      ctx.fillStyle  = '#444';
+      ctx.font       = '8px system-ui';
+      ctx.textAlign  = 'right';
+      ctx.fillText('$' + (val >= 1 ? val.toFixed(0) : val.toFixed(1)), LEFT - 3, y + 3);
+    }
+  }
+
+  // ── Bars
+  const gap  = 2;
+  const barW = Math.max(3, (chartW - gap * (n + 1)) / n);
+  _barRects  = [];
+
+  bars.forEach((b, i) => {
+    const x    = LEFT + gap + i * (barW + gap);
+    const barH = b.earnings > 0 ? Math.max(3, (b.earnings / gridMax) * (chartH - 8)) : 0;
+    const y    = chartH - barH;
+    const r    = Math.min(4, barW / 2);
+    const isHL = i === highlightIdx;
+
+    _barRects.push({ x, w: barW, bar: b, idx: i });
+
+    // Color
+    let base, glow;
+    if (b.isToday)        { base = '#ffc107'; glow = 'rgba(255,193,7,.25)'; }
+    else if (b.isFuture)  { base = '#191919'; glow = null; }
+    else if (b.earnings > 0) { base = '#00e676'; glow = 'rgba(0,230,118,.2)'; }
+    else                  { base = '#1a1a1a'; glow = null; }
+
+    // Glow on hover
+    if (isHL && glow) {
+      ctx.fillStyle = glow;
+      ctx.fillRect(x - 3, 0, barW + 6, chartH);
+    }
+
+    if (barH > 0) {
+      // Gradient bar
+      const grad = ctx.createLinearGradient(0, y, 0, chartH);
+      if (b.isToday) {
+        grad.addColorStop(0, isHL ? '#ffe082' : '#ffc107');
+        grad.addColorStop(1, isHL ? '#ff8f00' : '#e65100');
+      } else if (b.isFuture) {
+        grad.addColorStop(0, '#222');
+        grad.addColorStop(1, '#181818');
+      } else {
+        grad.addColorStop(0, isHL ? '#69f0ae' : '#00e676');
+        grad.addColorStop(1, isHL ? '#00c853' : '#00897b');
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + barW - r, y);
+      ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+      ctx.lineTo(x + barW, chartH);
+      ctx.lineTo(x, chartH);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Top shimmer
+      if (!b.isFuture) {
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(x, y, barW, Math.min(6, barH));
+      }
+    } else {
+      ctx.fillStyle = b.isFuture ? '#161616' : '#1c1c1c';
+      ctx.fillRect(x, chartH - 2, barW, 2);
+    }
+
+    // Day labels
+    const show = b.day === 1 || b.day % 5 === 0 || b.day === n || b.isToday || isHL;
+    if (show) {
+      ctx.fillStyle = b.isToday ? '#ffc107' : (isHL ? '#aaa' : '#3a3a3a');
+      ctx.font      = `${(b.isToday || isHL) ? '700 ' : ''}9px system-ui`;
+      ctx.textAlign = 'center';
+      ctx.fillText(b.day, x + barW / 2, H - 4);
+    }
+  });
+}
+
+function drawBarChart(canvasId, bars) {
+  _chartBars   = bars;
+  _chartCanvas = document.getElementById(canvasId);
+  _chartHovered = -1;
+  if (!_chartCanvas) return;
+  _chartCanvas._init = false;
+
+  _drawBars(-1);
+
+  // Events
+  _chartCanvas.onmousemove  = _onChartHover;
+  _chartCanvas.onmouseleave = _onChartLeave;
+  _chartCanvas.ontouchstart = _onChartTouch;
+  _chartCanvas.ontouchmove  = _onChartTouch;
+  _chartCanvas.ontouchend   = _onChartLeave;
+}
+
+function _hitBar(clientX) {
+  if (!_chartCanvas) return -1;
+  const rect = _chartCanvas.getBoundingClientRect();
+  const mx   = clientX - rect.left;
+  return _barRects.findIndex(b => mx >= b.x && mx <= b.x + b.w);
+}
+
+function _onChartHover(e) {
+  const idx = _hitBar(e.clientX);
+  if (idx !== _chartHovered) {
+    _chartHovered = idx;
+    _drawBars(idx);
+  }
+  if (idx >= 0) _showTooltip(e.clientX, e.clientY, _chartBars[idx]);
+  else          _hideTooltip();
+}
+
+function _onChartTouch(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  if (!t) return;
+  _onChartHover({ clientX: t.clientX, clientY: t.clientY });
+}
+
+function _onChartLeave() {
+  _chartHovered = -1;
+  _drawBars(-1);
+  _hideTooltip();
+}
+
+function _showTooltip(cx, cy, bar) {
+  const tt = document.getElementById('chart-tooltip');
+  if (!tt) return;
+
+  const label = bar.isToday ? "Aujourd'hui" : bar.isFuture ? 'À venir' : `Jour ${bar.day}`;
+  const val   = bar.isFuture ? '—' : money(bar.earnings);
+  const color = bar.isToday ? '#ffc107' : bar.isFuture ? '#444' : '#00e676';
+
+  tt.innerHTML = `
+    <div class="tt-day">${label}</div>
+    <div class="tt-val" style="color:${color}">${val}</div>
+    <div class="tt-label">${bar.isFuture ? 'Pas encore passé' : 'Gains estimés'}</div>`;
+  tt.style.display = 'block';
+
+  // Position: above cursor, avoid edges
+  const pad = 12;
+  let left = cx + 14;
+  let top  = cy - 70;
+  const ttW = 120, ttH = 70;
+  if (left + ttW > window.innerWidth - pad)  left = cx - ttW - 14;
+  if (top < pad)                              top  = cy + 14;
+  if (top + ttH > window.innerHeight - pad)  top  = window.innerHeight - ttH - pad;
+  tt.style.left = left + 'px';
+  tt.style.top  = top  + 'px';
+}
+
+function _hideTooltip() {
+  const tt = document.getElementById('chart-tooltip');
+  if (tt) tt.style.display = 'none';
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────
+async function askNotifPermission() {
+  if (!('Notification' in window)) return;
+  notifPermission = await Notification.requestPermission();
+  document.getElementById('notif-banner')?.classList.add('hidden');
+}
+
+function checkMilestones(players) {
+  if (notifPermission !== 'granted') return;
+  const last = parseInt(localStorage.getItem('lastMilestone') || '0');
+  const crossed = MILESTONES.filter(m => players >= m);
+  if (!crossed.length) { if (last > 0) localStorage.setItem('lastMilestone', '0'); return; }
+  const highest = crossed[crossed.length - 1];
+  if (highest > last) {
+    new Notification('🎮 Survive Granny', {
+      body: `🔥 ${highest} joueurs en ce moment !`,
+      icon: 'https://cdn-0001.qstv.on.epicgames.com/glnukYzSdizuXhteXl/image/landscape_comp.jpeg',
+    });
+    localStorage.setItem('lastMilestone', highest);
+  }
+  if (players < last * 0.6) localStorage.setItem('lastMilestone', crossed[crossed.length - 1]);
+}
+
+// ── RENDER MONTHLY SECTION ────────────────────────────
+function renderMonthly() {
+  const now   = parisNow();
+  const today = now.day;
+  const isCurrentMonth = selectedMonth === now.month && selectedYear === now.year;
+  const daysInMonth    = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+
+  // Build data lookup from yearlyDays
+  const dataMap = {};
+  (yearlyDays ?? []).forEach(d => {
+    if (d.year === selectedYear && d.month === selectedMonth)
+      dataMap[d.day] = d.minutes;
+  });
+
+  // Build full bar array — ALL days of month
+  const bars = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isFuture = isCurrentMonth && day > today;
+    const isToday  = isCurrentMonth && day === today;
+    const minutes  = dataMap[day] ?? 0;
+    bars.push({
+      day,
+      earnings: isFuture ? 0 : (minutes / 1000 * MULTIPLIER),
+      isPast:   !isFuture && !isToday,
+      isToday,
+      isFuture,
+    });
+  }
+
+  // Totals (only past + today)
+  const monthTotal  = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.earnings, 0);
+  const daysPassed  = isCurrentMonth ? today : daysInMonth;
+  const avgPerDay   = daysPassed > 0 ? monthTotal / daysPassed : 0;
+  const projection  = avgPerDay * daysInMonth;
+
+  // Month pills
+  const pills = MONTHS_SHORT.map((name, i) => {
+    const isFuture = selectedYear === now.year && i > now.month;
+    const isActive = i === selectedMonth;
+    return `<button class="month-pill ${isActive ? 'active' : ''} ${isFuture ? 'future' : ''}"
+              ${isFuture ? 'disabled' : `onclick="selectMonth(${i})"`}>${name}</button>`;
+  }).join('');
+
+  const prevDisabled = selectedMonth === 0 && selectedYear <= now.year - 1;
+  const nextDisabled = isCurrentMonth;
+
+  document.getElementById('monthly-section').innerHTML = `
+    <div class="monthly-card">
+      <div class="month-nav">
+        <button class="month-btn" onclick="changeMonth(-1)" ${prevDisabled ? 'disabled' : ''}>‹</button>
+        <span class="month-nav-title">📅 ${MONTHS_FR[selectedMonth]} ${selectedYear}</span>
+        <button class="month-btn" onclick="changeMonth(1)" ${nextDisabled ? 'disabled' : ''}>›</button>
+      </div>
+
+      <div class="month-pills" id="pills-row">${pills}</div>
+
+      <div class="bar-chart-wrap">
+        <canvas id="barChart"></canvas>
+      </div>
+
+      <div class="monthly-summary">
+        <div class="msumm">
+          <div class="ml">${isCurrentMonth ? 'Ce mois-ci' : 'Total du mois'}</div>
+          <div class="mv c-gold">${money(monthTotal)}</div>
+        </div>
+        <div class="msumm">
+          <div class="ml">Projection / mois</div>
+          <div class="mv c-purple">${money(projection)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    drawBarChart('barChart', bars);
+    document.querySelector('.month-pill.active')
+      ?.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+  });
+}
+
+function selectMonth(month) {
+  selectedMonth = month;
+  renderMonthly();
+}
+
+function changeMonth(dir) {
+  const now = parisNow();
+  let m = selectedMonth + dir;
+  let y = selectedYear;
+  if (m < 0)  { m = 11; y--; }
+  if (m > 11) { m = 0;  y++; }
+  if (y > now.year || (y === now.year && m > now.month)) return;
+  selectedMonth = m;
+  selectedYear  = y;
+  renderMonthly();
+}
+
+// ── RENDER MAIN ───────────────────────────────────────
+function render(island, graph, parsed) {
+  const now          = parisNow();
+  const values       = graph.data.values     ?? [];
+  const valuesAvg    = graph.data.values_avg ?? values;
+  const p24h         = graph.data.max_24h    ?? 0;
+  const currentPlayers = values.length ? values[values.length - 1] : 0;
+
+  // Today's minutes = sum of today's 10-min intervals (graph range=1d covers Paris today)
+  const todayMinutes  = valuesAvg.reduce((s, v) => s + v, 0) * 10;
+  const todayEarnings = todayMinutes * RATE * MULTIPLIER;
+
+  // Total all-time minutes = scraped directly from fortnite.gg HTML (actual "Minutes Played")
+  const totalMinutes  = parsed.totalMinutes ?? 0;
+  const totalEarnings = totalMinutes * RATE * MULTIPLIER;
+
+  const perHour = currentPlayers * 60 * RATE * MULTIPLIER;
+
+  const allTimePeak = parsed.allTimePeak ?? '—';
+  const favorites   = parsed.favorites   ?? '—';
+  const time        = parisTimeStr();
+  const nextMilestone = MILESTONES.find(m => m > currentPlayers) ?? null;
+  const showBanner    = notifPermission === 'default' && 'Notification' in window;
+
+  checkMilestones(currentPlayers);
+
+  document.getElementById('page').innerHTML = `
+    ${showBanner ? `
+    <div class="notif-banner" id="notif-banner" onclick="askNotifPermission()">
+      🔔 <span>Active les notifications pour les milestones</span>
+    </div>` : ''}
+
+    <!-- JOUEURS LIVE -->
+    <div class="hero">
+      <div class="hero-label">Joueurs en ce moment</div>
+      <div class="hero-number c-green">${currentPlayers}</div>
+      ${nextMilestone ? `<div class="hero-sub">Prochain milestone : <strong style="color:var(--green)">${nextMilestone}</strong></div>` : ''}
+      <div class="hero-peaks">
+        <div class="peak-item">
+          <div class="pv c-blue">${p24h}</div>
+          <div class="pl">Peak 24h</div>
+        </div>
+        <div class="peak-item">
+          <div class="pv" style="color:#ff8f00">${allTimePeak}</div>
+          <div class="pl">All-time</div>
+        </div>
+        <div class="peak-item">
+          <div class="pv c-blue">${favorites}</div>
+          <div class="pl">Favoris</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAINS/HEURE + AUJOURD'HUI -->
+    <div class="row2">
+      <div class="card">
+        <div class="card-label">💰 Gains / heure</div>
+        <div class="card-value c-gold">${money(perHour)}</div>
+        <div class="card-sub">Au rythme actuel<br><strong>${currentPlayers}</strong> joueurs ×2.7</div>
+      </div>
+      <div class="card">
+        <div class="card-label">📅 Aujourd'hui</div>
+        <div class="card-value c-gold">${money(todayEarnings)}</div>
+        <div class="card-sub"><strong>${Math.round(todayMinutes / 1000)}K</strong> min jouées ×2.7</div>
+      </div>
+    </div>
+
+    <!-- GAINS TOTAUX -->
+    <div class="card-wide">
+      <div class="card-label">📈 Gains totaux estimés</div>
+      <div class="total-row">
+        <div class="total-big c-purple">${money(totalEarnings)}</div>
+        <div class="total-tag">×2.7</div>
+      </div>
+      <div class="card-sub" style="margin-top:8px">
+        Basé sur <strong>${fmt(totalMinutes)}</strong> min jouées · $1 = 1 000 min
+      </div>
+    </div>
+
+    <!-- MONTHLY SECTION -->
+    <div id="monthly-section"></div>
+
+    <!-- LIEN FORTNITE.GG -->
+    <a class="link-btn" href="https://fortnite.gg/island/4482-9358-0065" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      Voir sur fortnite.gg
+    </a>
+
+    <div class="footer">Mis à jour à ${time} · refresh auto toutes les 60 s</div>
+  `;
+
+  renderMonthly();
+}
+
+// ── LOAD ──────────────────────────────────────────────
+async function load() {
+  try {
+    const [island, graph, yearGraph, html] = await Promise.all([
+      getJSON(API_ISLAND),
+      getJSON(API_GRAPH),
+      getJSON(API_YEAR),
+      getText(ISLAND_URL),
+    ]);
+
+    yearlyDays = aggregateByDay(yearGraph);
+    const parsed = parseHTML(html);
+    render(island, graph, parsed);
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('page').innerHTML = `
+      <div class="error-box">
+        ⚠️ Erreur de chargement<br>
+        <small>Vérifie ta connexion internet.</small><br><br>
+        <button onclick="location.reload()"
+          style="margin-top:8px;padding:8px 20px;border:none;border-radius:8px;
+                 background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
+          Réessayer
+        </button>
+      </div>`;
+  }
+}
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
