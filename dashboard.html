@@ -373,15 +373,21 @@ function parseK(str) {
 
 function parseHTML(html) {
   if (!html) return {};
-  // Proxies sometimes HTML-encode quotes; normalize before matching
   const h = html.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  const minutesM = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_ccu"/);
-  const allPeakM = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-peak"/);
-  const favM     = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_favorites"/);
+
+  // Find id="rank-{field}" anywhere in the HTML, then grab the last number in the 400 chars before it
+  function extractBefore(id) {
+    const pos = h.indexOf(`id="${id}"`);
+    if (pos === -1) return null;
+    const before = h.slice(Math.max(0, pos - 400), pos);
+    const matches = [...before.matchAll(/>([\d.]+[KMB]?)/g)];
+    return matches.length ? matches[matches.length - 1][1] : null;
+  }
+
   return {
-    totalMinutes: parseK(minutesM?.[1]),
-    allTimePeak:  allPeakM?.[1]?.trim() ?? null,
-    favorites:    favM?.[1]?.trim() ?? null,
+    totalMinutes: parseK(extractBefore('rank-total_ccu')),
+    allTimePeak:  extractBefore('rank-peak') ?? null,
+    favorites:    extractBefore('rank-total_favorites') ?? null,
   };
 }
 
