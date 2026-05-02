@@ -247,6 +247,28 @@
     /* ── FOOTER ─────────────────────────────── */
     .footer { text-align: center; font-size: 10px; color: #333; padding-top: 4px; }
 
+    /* ── PROJECTION EXPAND ─────────────────── */
+    .card { cursor: pointer; transition: border-color .15s; }
+    .card:active { border-color: #333; }
+    .proj-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .3s ease, opacity .3s ease;
+      opacity: 0;
+    }
+    .proj-row.open { max-height: 120px; opacity: 1; }
+    .proj-card {
+      background: #0d0d0d;
+      border: 1px solid #1e1e1e;
+      border-radius: 12px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .proj-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #444; margin-bottom: 5px; }
+    .proj-value { font-size: 22px; font-weight: 900; color: var(--gold); }
+    .proj-hint  { font-size: 10px; color: #333; margin-top: 14px; text-align: center; }
+
     /* ── LOADING / ERROR ────────────────────── */
     .loading { padding: 80px 20px; text-align: center; color: var(--dim); font-size: 13px; }
     .spinner {
@@ -351,10 +373,11 @@ function parseK(str) {
 
 function parseHTML(html) {
   if (!html) return {};
-  // Use id-anchored patterns on raw HTML — much more reliable than text-stripped regex
-  const minutesM = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_ccu"/);
-  const allPeakM = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-peak"/);
-  const favM     = html.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_favorites"/);
+  // Proxies sometimes HTML-encode quotes; normalize before matching
+  const h = html.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  const minutesM = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_ccu"/);
+  const allPeakM = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-peak"/);
+  const favM     = h.match(/class="stats-overview-number">([\d.]+[KMB]?)[^<]*<[^>]*id="rank-total_favorites"/);
   return {
     totalMinutes: parseK(minutesM?.[1]),
     allTimePeak:  allPeakM?.[1]?.trim() ?? null,
@@ -639,6 +662,15 @@ function _hideTooltip() {
   if (tt) tt.style.display = 'none';
 }
 
+// ── PROJECTION TOGGLE ─────────────────────────────────
+function toggleProj(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const others = ['proj-hour', 'proj-24h'].filter(x => x !== id);
+  others.forEach(o => document.getElementById(o)?.classList.remove('open'));
+  el.classList.toggle('open');
+}
+
 // ── NOTIFICATIONS ─────────────────────────────────────
 async function askNotifPermission() {
   if (!('Notification' in window)) return;
@@ -812,18 +844,44 @@ function render(island, graph, parsed) {
       </div>
     </div>
 
-    <!-- GAINS/HEURE + AUJOURD'HUI -->
+    <!-- GAINS/HEURE + 24H -->
     <div class="row2">
-      <div class="card">
+      <div class="card" onclick="toggleProj('proj-hour')">
         <div class="card-label">💰 Gains / heure</div>
         <div class="card-value c-gold">${money(perHour)}</div>
         <div class="card-sub">Au rythme actuel<br><strong>${currentPlayers}</strong> joueurs ×2.7</div>
       </div>
-      <div class="card">
-        <div class="card-label">📅 Aujourd'hui</div>
+      <div class="card" onclick="toggleProj('proj-24h')">
+        <div class="card-label">🕐 Les dernières 24h</div>
         <div class="card-value c-gold">${money(todayEarnings)}</div>
-        <div class="card-sub"><strong>${Math.round(todayMinutes / 1000)}K</strong> min jouées ×2.7</div>
+        <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées ×2.7</div>
       </div>
+    </div>
+
+    <!-- PROJECTION HEURE -->
+    <div class="proj-row" id="proj-hour">
+      <div class="proj-card">
+        <div class="proj-label">Projection / mois</div>
+        <div class="proj-value">${money(perHour * 24 * 30)}</div>
+      </div>
+      <div class="proj-card">
+        <div class="proj-label">Projection / an</div>
+        <div class="proj-value">${money(perHour * 24 * 365)}</div>
+      </div>
+      <div class="proj-hint" style="grid-column:1/-1">Si ce rythme se maintient 24h/24</div>
+    </div>
+
+    <!-- PROJECTION 24H -->
+    <div class="proj-row" id="proj-24h">
+      <div class="proj-card">
+        <div class="proj-label">Projection / mois</div>
+        <div class="proj-value">${money(todayEarnings * 30)}</div>
+      </div>
+      <div class="proj-card">
+        <div class="proj-label">Projection / an</div>
+        <div class="proj-value">${money(todayEarnings * 365)}</div>
+      </div>
+      <div class="proj-hint" style="grid-column:1/-1">Basé sur les dernières 24h</div>
     </div>
 
     <!-- GAINS TOTAUX -->
