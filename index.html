@@ -343,26 +343,38 @@ let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
 let selectedYear  = parseInt(_p.find(x => x.type === 'year').value);
 
 // ── FETCH ─────────────────────────────────────────────
+function fetchT(url, ms) {
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
+}
+
 async function getJSON(url) {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const r = await fetchT(url, 6000);
     if (r.ok) return r.json();
   } catch (_) {}
   try {
-    const r = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(9000) });
+    const r = await fetchT(PROXY + encodeURIComponent(url), 10000);
     if (r.ok) { const w = await r.json(); return JSON.parse(w.contents); }
   } catch (_) {}
-  const r = await fetch(PROXY2 + encodeURIComponent(url), { signal: AbortSignal.timeout(9000) });
-  return r.json();
+  try {
+    const r = await fetchT(PROXY2 + encodeURIComponent(url), 10000);
+    if (r.ok) return r.json();
+  } catch (_) {}
+  throw new Error('fetch failed: ' + url);
 }
 
 async function getText(url) {
   try {
-    const r = await fetch(PROXY + encodeURIComponent(url), { signal: AbortSignal.timeout(11000) });
-    if (r.ok) { const w = await r.json(); return w.contents; }
+    const r = await fetchT(PROXY + encodeURIComponent(url), 12000);
+    if (r.ok) { const w = await r.json(); return w.contents || ''; }
   } catch (_) {}
-  const r = await fetch(PROXY2 + encodeURIComponent(url), { signal: AbortSignal.timeout(11000) });
-  return r.text();
+  try {
+    const r = await fetchT(PROXY2 + encodeURIComponent(url), 12000);
+    if (r.ok) return r.text();
+  } catch (_) {}
+  return '';
 }
 
 // ── PARSE HTML ────────────────────────────────────────
