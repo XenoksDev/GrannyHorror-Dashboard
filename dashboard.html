@@ -68,6 +68,27 @@
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
+    /* ── TX TOGGLE ──────────────────────────── */
+    .tx-bar {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; padding: 10px 20px 0;
+    }
+    .tx-label { font-size: 11px; font-weight: 700; color: var(--dim); letter-spacing: .5px; }
+    .tx-label.active { color: var(--gold); }
+    .toggle-pill {
+      position: relative; width: 44px; height: 24px;
+      background: #222; border-radius: 12px; cursor: pointer;
+      border: 1px solid #333; transition: background .2s;
+      flex-shrink: 0;
+    }
+    .toggle-pill.on { background: rgba(255,193,7,.2); border-color: rgba(255,193,7,.4); }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #444; transition: transform .2s, background .2s;
+    }
+    .toggle-pill.on .toggle-thumb { transform: translateX(20px); background: var(--gold); }
+
     /* ── MAIN CONTENT ───────────────────────── */
     .page { padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; max-width: 480px; margin: 0 auto; }
 
@@ -253,13 +274,13 @@
     .card { cursor: pointer; transition: border-color .15s; }
     .card:active { border-color: #333; }
     .proj-row {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
       overflow: hidden;
       max-height: 0;
-      transition: max-height .3s ease, opacity .3s ease;
+      transition: max-height .35s ease, opacity .35s ease;
       opacity: 0;
     }
-    .proj-row.open { max-height: 120px; opacity: 1; }
+    .proj-row.open { max-height: 140px; opacity: 1; }
     .proj-card {
       background: #0d0d0d;
       border: 1px solid #1e1e1e;
@@ -305,6 +326,14 @@
   <div class="live-pill"><div class="live-dot"></div>LIVE</div>
 </header>
 
+<div class="tx-bar">
+  <span class="tx-label active" id="tx-off-label">Base</span>
+  <div class="toggle-pill on" id="tx-toggle" onclick="toggleTx()">
+    <div class="toggle-thumb"></div>
+  </div>
+  <span class="tx-label active" id="tx-on-label">×2.7 transactions</span>
+</div>
+
 <div class="page" id="page">
   <div class="loading"><div class="spinner"></div>Chargement…</div>
 </div>
@@ -337,10 +366,24 @@ const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep'
 // ── STATE ─────────────────────────────────────────────
 let yearlyDays      = null;
 let notifPermission = Notification?.permission ?? 'default';
+let withTransactions = true;
+let _lastIsland = null, _lastGraph = null, _lastParsed = null;
 // Paris date for initial state
 const _p = new Intl.DateTimeFormat('en-US', { timeZone:'Europe/Paris', year:'numeric', month:'numeric' }).formatToParts(new Date());
 let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
 let selectedYear  = parseInt(_p.find(x => x.type === 'year').value);
+
+// ── TX TOGGLE ─────────────────────────────────────────
+function toggleTx() {
+  withTransactions = !withTransactions;
+  const pill    = document.getElementById('tx-toggle');
+  const onLabel = document.getElementById('tx-on-label');
+  const offLabel= document.getElementById('tx-off-label');
+  pill?.classList.toggle('on', withTransactions);
+  if (onLabel)  onLabel.style.color  = withTransactions ? 'var(--gold)' : 'var(--dim)';
+  if (offLabel) offLabel.style.color = withTransactions ? 'var(--dim)'  : 'var(--text)';
+  if (_lastIsland) render(_lastIsland, _lastGraph, _lastParsed);
+}
 
 // ── FETCH ─────────────────────────────────────────────
 function fetchT(url, ms) {
@@ -738,7 +781,7 @@ function renderMonthly() {
     const minutes  = dataMap[day] ?? 0;
     bars.push({
       day,
-      earnings: isFuture ? 0 : (minutes / 1000 * MULTIPLIER),
+      earnings: isFuture ? 0 : (minutes / 1000 * (withTransactions ? MULTIPLIER : 1)),
       isPast:   !isFuture && !isToday,
       isToday,
       isFuture,
@@ -815,21 +858,21 @@ function changeMonth(dir) {
 
 // ── RENDER MAIN ───────────────────────────────────────
 function render(island, graph, parsed) {
+  _lastIsland = island; _lastGraph = graph; _lastParsed = parsed;
+  const mult         = withTransactions ? MULTIPLIER : 1;
   const now          = parisNow();
   const values       = graph.data.values     ?? [];
   const valuesAvg    = graph.data.values_avg ?? values;
   const p24h         = graph.data.max_24h    ?? 0;
   const currentPlayers = values.length ? values[values.length - 1] : 0;
 
-  // Today's minutes = sum of today's 10-min intervals (graph range=1d covers Paris today)
   const todayMinutes  = valuesAvg.reduce((s, v) => s + v, 0) * 10;
-  const todayEarnings = todayMinutes * RATE * MULTIPLIER;
+  const todayEarnings = todayMinutes * RATE * mult;
 
-  // Total all-time minutes = scraped directly from fortnite.gg HTML (actual "Minutes Played")
   const totalMinutes  = parsed.totalMinutes ?? 0;
-  const totalEarnings = totalMinutes * RATE * MULTIPLIER;
+  const totalEarnings = totalMinutes * RATE * mult;
 
-  const perHour = currentPlayers * 60 * RATE * MULTIPLIER;
+  const perHour = currentPlayers * 60 * RATE * mult;
 
   const allTimePeak = parsed.allTimePeak ?? '—';
   const favorites   = parsed.favorites   ?? '—';
@@ -883,27 +926,33 @@ function render(island, graph, parsed) {
     <!-- PROJECTION HEURE -->
     <div class="proj-row" id="proj-hour">
       <div class="proj-card">
-        <div class="proj-label">Projection / mois</div>
+        <div class="proj-label">/ jour</div>
+        <div class="proj-value">${money(perHour * 24)}</div>
+      </div>
+      <div class="proj-card">
+        <div class="proj-label">/ mois</div>
         <div class="proj-value">${money(perHour * 24 * 30)}</div>
       </div>
       <div class="proj-card">
-        <div class="proj-label">Projection / an</div>
+        <div class="proj-label">/ an</div>
         <div class="proj-value">${money(perHour * 24 * 365)}</div>
       </div>
-      <div class="proj-hint" style="grid-column:1/-1">Si ce rythme se maintient 24h/24</div>
     </div>
 
     <!-- PROJECTION 24H -->
     <div class="proj-row" id="proj-24h">
       <div class="proj-card">
-        <div class="proj-label">Projection / mois</div>
+        <div class="proj-label">/ jour</div>
+        <div class="proj-value">${money(todayEarnings)}</div>
+      </div>
+      <div class="proj-card">
+        <div class="proj-label">/ mois</div>
         <div class="proj-value">${money(todayEarnings * 30)}</div>
       </div>
       <div class="proj-card">
-        <div class="proj-label">Projection / an</div>
+        <div class="proj-label">/ an</div>
         <div class="proj-value">${money(todayEarnings * 365)}</div>
       </div>
-      <div class="proj-hint" style="grid-column:1/-1">Basé sur les dernières 24h</div>
     </div>
 
     <!-- GAINS TOTAUX -->
@@ -911,7 +960,7 @@ function render(island, graph, parsed) {
       <div class="card-label">Gains totaux estimés</div>
       <div class="total-row">
         <div class="total-big c-purple">${money(totalEarnings)}</div>
-        <div class="total-tag">×2.7</div>
+        <div class="total-tag">${withTransactions ? '×2.7' : '×1'}</div>
       </div>
       <div class="card-sub" style="margin-top:8px">
         Basé sur <strong>${fmt(totalMinutes)}</strong> min jouées · $1 = 1 000 min
