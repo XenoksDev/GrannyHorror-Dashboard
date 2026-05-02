@@ -7,6 +7,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#080808">
   <title>Granny Stats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&display=swap">
   <style>
     :root {
       --bg:      #080808;
@@ -25,7 +27,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       padding-bottom: 40px;
     }
@@ -78,7 +80,7 @@
       text-align: center;
     }
     .hero-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
-    .hero-number { font-size: 80px; font-weight: 900; line-height: 1; color: var(--green); letter-spacing: -3px; }
+    .hero-number { font-size: 80px; font-weight: 800; line-height: 1; color: var(--green); letter-spacing: -3px; font-variant-numeric: tabular-nums; }
     .hero-sub { font-size: 12px; color: var(--dim); margin-top: 10px; }
     .hero-peaks { display: flex; justify-content: center; gap: 24px; margin-top: 14px; }
     .peak-item { text-align: center; }
@@ -96,7 +98,7 @@
       padding: 18px;
     }
     .card-label { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
-    .card-value { font-size: 32px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+    .card-value { font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
     .card-sub { font-size: 11px; color: var(--dim); margin-top: 6px; line-height: 1.4; }
     .card-sub strong { color: var(--text); font-weight: 600; }
 
@@ -113,7 +115,7 @@
       padding: 20px 22px;
     }
     .total-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .total-big { font-size: 52px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+    .total-big { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
     .total-tag {
       font-size: 10px; font-weight: 700; letter-spacing: 1px;
       background: rgba(179,157,219,.15);
@@ -315,14 +317,15 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────
-const ISLAND_ID  = 519527;
-const ISLAND_URL = 'https://fortnite.gg/island/4482-9358-0065';
-const API_ISLAND = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
-const API_GRAPH  = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
-const API_YEAR   = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
-const PROXY      = 'https://api.allorigins.win/get?url=';
-const PROXY2     = 'https://corsproxy.io/?';
-const REFRESH_MS = 60_000;
+const ISLAND_ID    = 519527;
+const ISLAND_URL   = 'https://fortnite.gg/island/4482-9358-0065';
+const API_ISLAND   = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
+const API_STATS    = `https://fortnite.gg/island?id=${ISLAND_ID}`;          // actual values, no ranks
+const API_GRAPH    = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
+const API_YEAR     = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
+const PROXY        = 'https://api.allorigins.win/get?url=';
+const PROXY2       = 'https://corsproxy.io/?';
+const REFRESH_MS   = 60_000;
 
 const RATE       = 1 / 1000;   // $1 per 1000 player-minutes
 const MULTIPLIER = 2.7;        // ×2.7 (playtime + transactions)
@@ -750,7 +753,7 @@ function renderMonthly() {
     <div class="monthly-card">
       <div class="month-nav">
         <button class="month-btn" onclick="changeMonth(-1)" ${prevDisabled ? 'disabled' : ''}>‹</button>
-        <span class="month-nav-title">📅 ${MONTHS_FR[selectedMonth]} ${selectedYear}</span>
+        <span class="month-nav-title">${MONTHS_FR[selectedMonth]} ${selectedYear}</span>
         <button class="month-btn" onclick="changeMonth(1)" ${nextDisabled ? 'disabled' : ''}>›</button>
       </div>
 
@@ -853,14 +856,14 @@ function render(island, graph, parsed) {
     <!-- GAINS/HEURE + 24H -->
     <div class="row2">
       <div class="card" onclick="toggleProj('proj-hour')">
-        <div class="card-label">💰 Gains / heure</div>
+        <div class="card-label">Gains / heure</div>
         <div class="card-value c-gold">${money(perHour)}</div>
-        <div class="card-sub">Au rythme actuel<br><strong>${currentPlayers}</strong> joueurs ×2.7</div>
+        <div class="card-sub">Au rythme actuel · <strong>${currentPlayers}</strong> joueurs</div>
       </div>
       <div class="card" onclick="toggleProj('proj-24h')">
-        <div class="card-label">🕐 Les dernières 24h</div>
+        <div class="card-label">Dernières 24h</div>
         <div class="card-value c-gold">${money(todayEarnings)}</div>
-        <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées ×2.7</div>
+        <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées</div>
       </div>
     </div>
 
@@ -892,7 +895,7 @@ function render(island, graph, parsed) {
 
     <!-- GAINS TOTAUX -->
     <div class="card-wide">
-      <div class="card-label">📈 Gains totaux estimés</div>
+      <div class="card-label">Gains totaux estimés</div>
       <div class="total-row">
         <div class="total-big c-purple">${money(totalEarnings)}</div>
         <div class="total-tag">×2.7</div>
@@ -923,31 +926,44 @@ function render(island, graph, parsed) {
 
 // ── LOAD ──────────────────────────────────────────────
 async function load() {
-  try {
-    const [island, graph, yearGraph, html] = await Promise.all([
-      getJSON(API_ISLAND),
-      getJSON(API_GRAPH),
-      getJSON(API_YEAR),
-      getText(ISLAND_URL),
-    ]);
+  const [islandRes, graphRes, yearRes, statsRes, htmlRes] = await Promise.allSettled([
+    getJSON(API_ISLAND),
+    getJSON(API_GRAPH),
+    getJSON(API_YEAR),
+    getJSON(API_STATS),
+    getText(ISLAND_URL),
+  ]);
 
-    yearlyDays = aggregateByDay(yearGraph);
-    const parsed = parseHTML(html);
-    render(island, graph, parsed);
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('page').innerHTML = `
-      <div class="error-box">
-        ⚠️ Erreur de chargement<br>
-        <small>Vérifie ta connexion internet.</small><br><br>
-        <button onclick="location.reload()"
-          style="margin-top:8px;padding:8px 20px;border:none;border-radius:8px;
-                 background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
-          Réessayer
-        </button>
-      </div>`;
+  if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
+    if (!document.querySelector('.hero')) {
+      document.getElementById('page').innerHTML = `
+        <div class="error-box">
+          ⚠️ Erreur de chargement<br>
+          <small>Vérifie ta connexion internet.</small><br><br>
+          <button onclick="location.reload()"
+            style="margin-top:8px;padding:8px 20px;border:none;border-radius:8px;
+                   background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
+            Réessayer
+          </button>
+        </div>`;
+    }
+    return;
   }
+
+  if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
+
+  // Total minutes: prefer actual API value (no &ranks), fallback to HTML scrape
+  const statsData   = statsRes.status  === 'fulfilled' ? statsRes.value?.data  : null;
+  const htmlParsed  = htmlRes.status   === 'fulfilled' ? parseHTML(htmlRes.value) : {};
+  const totalMinutes = statsData?.total_ccu ?? htmlParsed.totalMinutes ?? 0;
+
+  const parsed = {
+    totalMinutes,
+    allTimePeak: statsData?.peak ?? htmlParsed.allTimePeak ?? null,
+    favorites:   statsData?.total_favorites ?? htmlParsed.favorites ?? null,
+  };
+
+  render(islandRes.value, graphRes.value, parsed);
 }
 
 load();
