@@ -335,6 +335,57 @@
       border-radius: 14px; padding: 20px; text-align: center;
       color: #ef5350; font-size: 13px; line-height: 1.6;
     }
+
+    /* ── SIMULATOR ──────────────────────────────── */
+    .sim-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 18px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .sim-section-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .sim-input {
+      background: #0d0d0d; border: 1px solid #282828;
+      border-radius: 10px; color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums;
+      padding: 12px 14px; width: 100%;
+      -moz-appearance: textfield;
+    }
+    .sim-input::-webkit-inner-spin-button,
+    .sim-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .sim-input:focus { outline: none; border-color: #444; }
+    .sim-earn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sim-r { background: #0d0d0d; border-radius: 10px; padding: 10px 12px; }
+    .sim-rl { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #444; margin-bottom: 3px; }
+    .sim-rv { font-size: 17px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+    .sim-divider { height: 1px; background: #1c1c1c; }
+    .sim-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .sim-field { display: flex; flex-direction: column; gap: 5px; }
+    .sim-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #444; }
+    .sim-input-sm {
+      background: #0d0d0d; border: 1px solid #282828;
+      border-radius: 8px; color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+      padding: 9px 10px; width: 100%;
+      -moz-appearance: textfield;
+    }
+    .sim-input-sm::-webkit-inner-spin-button,
+    .sim-input-sm::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .sim-input-sm:focus { outline: none; border-color: #444; }
+    .sim-result-box {
+      background: #0d0d0d; border-radius: 10px; padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .sim-roi-row { display: flex; justify-content: space-between; align-items: center; }
+    .sim-breakeven {
+      font-size: 11px; color: #444;
+      border-top: 1px solid #1c1c1c; padding-top: 8px;
+    }
+    .sim-breakeven strong { color: var(--text); }
   </style>
 </head>
 <body>
@@ -362,8 +413,52 @@
   <span class="tx-label active" id="tx-on-label">×2.7 transactions</span>
 </div>
 
-<div class="page" id="page">
-  <div class="loading"><div class="spinner"></div>Chargement…</div>
+<div class="page">
+  <div id="page">
+    <div class="loading"><div class="spinner"></div>Chargement…</div>
+  </div>
+
+  <div id="monthly-section"></div>
+
+  <!-- SIMULATEUR (statique — persiste entre les refreshs) -->
+  <div class="sim-card" id="sim-section" style="display:none">
+    <div class="sim-section-title">Simulateur de gains</div>
+    <div>
+      <div class="sim-label" style="margin-bottom:8px">Nombre de joueurs</div>
+      <input class="sim-input" type="number" id="sim-players" value="0" min="0"
+             oninput="_simEdited=true;updateSim()">
+    </div>
+    <div class="sim-earn-grid" id="sim-earn-results"></div>
+
+    <div class="sim-divider"></div>
+    <div class="sim-section-title">Campagne Fortnite</div>
+    <div class="sim-grid">
+      <div class="sim-field">
+        <div class="sim-label">Budget ($)</div>
+        <input class="sim-input-sm" type="number" id="sim-budget" value="500" min="0" oninput="updateCampaign()">
+      </div>
+      <div class="sim-field">
+        <div class="sim-label">+Joueurs moy.</div>
+        <input class="sim-input-sm" type="number" id="sim-boost" value="50" min="0" oninput="updateCampaign()">
+      </div>
+      <div class="sim-field">
+        <div class="sim-label">Durée (jours)</div>
+        <input class="sim-input-sm" type="number" id="sim-days" value="7" min="1" oninput="updateCampaign()">
+      </div>
+    </div>
+    <div class="sim-result-box" id="sim-campaign-result"></div>
+  </div>
+
+  <a class="link-btn" href="https://fortnite.gg/island/4482-9358-0065" target="_blank" rel="noopener">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+      <polyline points="15 3 21 3 21 9"/>
+      <line x1="10" y1="14" x2="21" y2="3"/>
+    </svg>
+    Voir sur fortnite.gg
+  </a>
+
+  <div class="footer">Mis à jour à <span id="update-time">--:--</span> · refresh auto 60s</div>
 </div>
 
 <div id="chart-tooltip">
@@ -413,13 +508,14 @@ function toggleTx() {
   if (onLabel)  onLabel.style.color  = withTransactions ? 'var(--gold)' : 'var(--dim)';
   if (offLabel) offLabel.style.color = withTransactions ? 'var(--dim)'  : 'var(--text)';
   if (_lastGraph) render(_lastIsland, _lastGraph, _lastParsed);
+  updateSim();
 }
 
 // ── FETCH ─────────────────────────────────────────────
 function fetchT(url, ms) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal, cache: 'no-store' }).finally(() => clearTimeout(tid));
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
 }
 
 async function getJSON(url) {
@@ -1062,23 +1158,60 @@ function render(island, graph, parsed) {
       </div>
     </div>
 
-    <!-- MONTHLY SECTION -->
-    <div id="monthly-section"></div>
-
-    <!-- LIEN FORTNITE.GG -->
-    <a class="link-btn" href="https://fortnite.gg/island/4482-9358-0065" target="_blank" rel="noopener">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/>
-        <line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
-      Voir sur fortnite.gg
-    </a>
-
-    <div class="footer">Mis à jour à ${time} · refresh auto toutes les 60 s</div>
   `;
 
+  // Update static elements outside #page
+  const timeEl = document.getElementById('update-time');
+  if (timeEl) timeEl.textContent = time;
+  const simEl = document.getElementById('sim-section');
+  if (simEl) simEl.style.display = '';
+  updateSim(currentPlayers);
+
   renderMonthly();
+}
+
+// ── SIMULATOR ─────────────────────────────────────────
+let _simEdited = false;
+
+function updateSim(defaultPlayers) {
+  const input = document.getElementById('sim-players');
+  if (!input) return;
+  if (defaultPlayers !== undefined && !_simEdited) input.value = defaultPlayers;
+  const players = Math.max(0, parseInt(input.value) || 0);
+  const mult    = withTransactions ? MULTIPLIER : 1;
+  const perHour = players * 60 * RATE * mult;
+  const el = document.getElementById('sim-earn-results');
+  if (el) el.innerHTML = `
+    <div class="sim-r"><div class="sim-rl">/ heure</div><div class="sim-rv">${money(perHour)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ jour</div><div class="sim-rv">${money(perHour * 24)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ mois</div><div class="sim-rv">${money(perHour * 24 * 30)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ an</div><div class="sim-rv">${money(perHour * 24 * 365)}</div></div>`;
+  updateCampaign();
+}
+
+function updateCampaign() {
+  const budget = Math.max(0, parseFloat(document.getElementById('sim-budget')?.value) || 0);
+  const boost  = Math.max(0, parseInt(document.getElementById('sim-boost')?.value)  || 0);
+  const days   = Math.max(1, parseInt(document.getElementById('sim-days')?.value)   || 1);
+  const mult   = withTransactions ? MULTIPLIER : 1;
+  const extraEarn  = boost * days * 1440 * RATE * mult;
+  const profit     = extraEarn - budget;
+  const breakEven  = budget > 0 ? Math.ceil(budget / (days * 1440 * RATE * mult)) : 0;
+  const isWin      = profit >= 0;
+  const el = document.getElementById('sim-campaign-result');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="sim-roi-row">
+      <div>
+        <div class="sim-rl">Gains campagne</div>
+        <div class="sim-rv" style="color:var(--blue);font-size:20px">${money(extraEarn)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="sim-rl">${isWin ? 'Profit net' : 'Perte nette'}</div>
+        <div class="sim-rv" style="color:${isWin ? 'var(--green)' : '#ef5350'};font-size:20px">${isWin ? '+' : ''}${money(profit)}</div>
+      </div>
+    </div>
+    ${budget > 0 ? `<div class="sim-breakeven">Break-even : <strong>${breakEven} joueurs</strong> en moyenne sur ${days}j</div>` : ''}`;
 }
 
 // ── CACHE ─────────────────────────────────────────────
