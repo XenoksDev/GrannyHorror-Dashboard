@@ -408,31 +408,44 @@ function fetchT(url, ms) {
 }
 
 async function getJSON(url) {
+  // Try direct first (instant CORS fail on fortnite.gg, so short timeout)
   try {
-    const r = await fetchT(url, 6000);
+    const r = await fetchT(url, 5000);
     if (r.ok) return r.json();
   } catch (_) {}
-  try {
-    const r = await fetchT(PROXY + encodeURIComponent(url), 10000);
-    if (r.ok) { const w = await r.json(); return JSON.parse(w.contents); }
-  } catch (_) {}
-  try {
-    const r = await fetchT(PROXY2 + encodeURIComponent(url), 10000);
-    if (r.ok) return r.json();
-  } catch (_) {}
-  throw new Error('fetch failed: ' + url);
+
+  // Race both proxies — first success wins
+  return new Promise((resolve, reject) => {
+    let failures = 0;
+    const onFail = () => { if (++failures === 2) reject(new Error('fetch failed: ' + url)); };
+
+    fetchT(PROXY + encodeURIComponent(url), 18000)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(w => JSON.parse(w.contents))
+      .then(resolve).catch(onFail);
+
+    fetchT(PROXY2 + encodeURIComponent(url), 18000)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(resolve).catch(onFail);
+  });
 }
 
 async function getText(url) {
-  try {
-    const r = await fetchT(PROXY + encodeURIComponent(url), 12000);
-    if (r.ok) { const w = await r.json(); return w.contents || ''; }
-  } catch (_) {}
-  try {
-    const r = await fetchT(PROXY2 + encodeURIComponent(url), 12000);
-    if (r.ok) return r.text();
-  } catch (_) {}
-  return '';
+  return new Promise(resolve => {
+    let done = false;
+    const ok = v => { if (!done) { done = true; resolve(v); } };
+    setTimeout(() => ok(''), 19000); // hard fallback
+
+    fetchT(PROXY + encodeURIComponent(url), 18000)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(w => ok(w.contents || ''))
+      .catch(() => {});
+
+    fetchT(PROXY2 + encodeURIComponent(url), 18000)
+      .then(r => r.ok ? r.text() : Promise.reject())
+      .then(ok)
+      .catch(() => {});
+  });
 }
 
 // ── PARSE HTML ────────────────────────────────────────
@@ -1007,7 +1020,10 @@ function render(island, graph, parsed) {
 }
 
 // ── LOAD ──────────────────────────────────────────────
+let _loadAttempt = 0;
+
 async function load() {
+  _loadAttempt++;
   const [islandRes, graphRes, yearRes, statsRes, htmlRes] = await Promise.allSettled([
     getJSON(API_ISLAND),
     getJSON(API_GRAPH),
@@ -1017,12 +1033,17 @@ async function load() {
   ]);
 
   if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
+    if (_loadAttempt < 3) {
+      // Silent retry after 4s — don't flash an error to the user
+      setTimeout(load, 4000);
+      return;
+    }
     if (!document.querySelector('.hero')) {
       document.getElementById('page').innerHTML = `
         <div class="error-box">
-          ⚠️ Erreur de chargement<br>
-          <small>Vérifie ta connexion internet.</small><br><br>
-          <button onclick="location.reload()"
+          Erreur de chargement<br>
+          <small>Les serveurs sont lents ou hors ligne.</small><br><br>
+          <button onclick="_loadAttempt=0;load()"
             style="margin-top:8px;padding:8px 20px;border:none;border-radius:8px;
                    background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
             Réessayer
@@ -1031,6 +1052,7 @@ async function load() {
     }
     return;
   }
+  _loadAttempt = 0;
 
   if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
 
