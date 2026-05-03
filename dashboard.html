@@ -1137,12 +1137,11 @@ async function load() {
   _loadAttempt++;
   showLoader();
 
-  // API_STATS returns HTML (not JSON) — fetch with getText and parse manually
   const [islandRes, graphRes, yearRes, statsRes] = await Promise.allSettled([
     getJSON(API_ISLAND),
     getJSON(API_GRAPH),
     getJSON(API_YEAR),
-    getText(API_STATS),
+    getText(ISLAND_URL),   // island page confirmed to have rank-total_ccu in HTML
   ]);
 
   if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
@@ -1170,11 +1169,9 @@ async function load() {
 
   if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
 
-  const htmlParsed  = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
-  // Fallback: sum yearlyDays if HTML scrape returns 0
-  const yearTotal   = yearlyDays ? Math.round(yearlyDays.reduce((s, d) => s + d.minutes, 0)) : 0;
+  const htmlParsed = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
   const parsed = {
-    totalMinutes: htmlParsed.totalMinutes || yearTotal || 0,
+    totalMinutes: htmlParsed.totalMinutes || 0,
     allTimePeak:  htmlParsed.allTimePeak  ?? null,
     favorites:    htmlParsed.favorites    ?? null,
   };
