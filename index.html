@@ -380,6 +380,7 @@ const API_ISLAND   = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
 const API_STATS    = `https://fortnite.gg/island?id=${ISLAND_ID}`;          // actual values, no ranks
 const API_GRAPH    = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
 const API_YEAR     = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
+const PROXY_OWN    = '/.netlify/functions/proxy?url=';  // our own — fast, server-side
 const PROXY        = 'https://api.allorigins.win/get?url=';
 const PROXY2       = 'https://corsproxy.io/?';
 const REFRESH_MS   = 60_000;
@@ -422,40 +423,47 @@ function fetchT(url, ms) {
 }
 
 async function getJSON(url) {
-  // Try direct first (instant CORS fail on fortnite.gg, so short timeout)
+  // 1. Own Netlify proxy — server-side, no CORS, fast
   try {
-    const r = await fetchT(url, 5000);
+    const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
     if (r.ok) return r.json();
   } catch (_) {}
 
-  // Race both proxies — first success wins
+  // 2. Race external proxies as fallback
   return new Promise((resolve, reject) => {
     let failures = 0;
     const onFail = () => { if (++failures === 2) reject(new Error('fetch failed: ' + url)); };
 
-    fetchT(PROXY + encodeURIComponent(url), 18000)
+    fetchT(PROXY + encodeURIComponent(url), 15000)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(w => JSON.parse(w.contents))
       .then(resolve).catch(onFail);
 
-    fetchT(PROXY2 + encodeURIComponent(url), 18000)
+    fetchT(PROXY2 + encodeURIComponent(url), 15000)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(resolve).catch(onFail);
   });
 }
 
 async function getText(url) {
+  // 1. Own Netlify proxy — returns body directly
+  try {
+    const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
+    if (r.ok) return r.text();
+  } catch (_) {}
+
+  // 2. Race external proxies as fallback
   return new Promise(resolve => {
     let done = false;
     const ok = v => { if (!done) { done = true; resolve(v); } };
-    setTimeout(() => ok(''), 19000); // hard fallback
+    setTimeout(() => ok(''), 16000);
 
-    fetchT(PROXY + encodeURIComponent(url), 18000)
+    fetchT(PROXY + encodeURIComponent(url), 15000)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(w => ok(w.contents || ''))
       .catch(() => {});
 
-    fetchT(PROXY2 + encodeURIComponent(url), 18000)
+    fetchT(PROXY2 + encodeURIComponent(url), 15000)
       .then(r => r.ok ? r.text() : Promise.reject())
       .then(ok)
       .catch(() => {});
