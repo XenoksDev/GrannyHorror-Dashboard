@@ -54,6 +54,40 @@
     .map-name { font-size: 13px; font-weight: 800; letter-spacing: .2px; }
     .map-code { font-size: 11px; color: var(--dim); margin-top: 2px; }
 
+    /* ── CLOCK BAR ──────────────────────────── */
+    .clock-bar {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      padding: 10px 20px 0;
+    }
+    .clock-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+    .clock-time {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .clock-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .clock-sep {
+      width: 1px;
+      background: #222;
+      align-self: stretch;
+      margin: 4px 0;
+    }
+
     .live-pill {
       display: flex; align-items: center; gap: 5px;
       background: rgba(0,230,118,.1);
@@ -409,6 +443,18 @@
   <div class="live-pill"><div class="live-dot"></div>LIVE</div>
 </header>
 
+<div class="clock-bar">
+  <div class="clock-item">
+    <div class="clock-time" id="clock-paris">--:--:--</div>
+    <div class="clock-label">🇫🇷 Paris</div>
+  </div>
+  <div class="clock-sep"></div>
+  <div class="clock-item">
+    <div class="clock-time" id="clock-et">--:--:--</div>
+    <div class="clock-label">🇺🇸 New York ET</div>
+  </div>
+</div>
+
 <div class="tx-bar">
   <span class="tx-label active" id="tx-off-label">Base</span>
   <div class="toggle-pill on" id="tx-toggle" onclick="toggleTx()">
@@ -651,6 +697,19 @@ function parisTimeStr() {
 function etTimeStr() {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit',
+    hour12: true,
+  }).format(new Date());
+}
+
+function parisTimeSecStr() {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(new Date());
+}
+
+function etTimeSecStr() {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', second: '2-digit',
     hour12: true,
   }).format(new Date());
 }
@@ -1377,13 +1436,17 @@ if (_cached) {
 load();
 setInterval(load, REFRESH_MS);
 
-// ── ET CLOCK (live, updates every 30s) ───────────────
-function tickET() {
-  const el = document.getElementById('et-time');
-  if (el) el.textContent = etTimeStr();
+// ── CLOCK (live, updates every second) ───────────────
+function tickClocks() {
+  const paris = document.getElementById('clock-paris');
+  const et    = document.getElementById('clock-et');
+  const etFt  = document.getElementById('et-time');
+  if (paris) paris.textContent = parisTimeSecStr();
+  if (et)    et.textContent    = etTimeSecStr();
+  if (etFt)  etFt.textContent  = etTimeStr();
 }
-tickET();
-setInterval(tickET, 30_000);
+tickClocks();
+setInterval(tickClocks, 1000);
 
 // ── SERVICE WORKER ────────────────────────────────────
 if ('serviceWorker' in navigator) {
