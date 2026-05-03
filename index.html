@@ -270,6 +270,17 @@
     /* ── FOOTER ─────────────────────────────── */
     .footer { text-align: center; font-size: 10px; color: #333; padding-top: 4px; }
 
+    /* ── TOP LOADER BAR ─────────────────────── */
+    #top-loader {
+      position: fixed; top: 0; left: 0; z-index: 9999;
+      height: 2px; width: 0%;
+      background: linear-gradient(90deg, var(--green), #69f0ae);
+      box-shadow: 0 0 10px rgba(0,230,118,.7);
+      opacity: 0;
+      pointer-events: none;
+      transition: width .35s ease, opacity .4s ease;
+    }
+
     /* ── ESTIMATIONS SECTION ───────────────── */
     .estimates-section {
       background: var(--card);
@@ -327,6 +338,8 @@
   </style>
 </head>
 <body>
+
+<div id="top-loader"></div>
 
 <header>
   <div class="map-info">
@@ -1019,11 +1032,62 @@ function render(island, graph, parsed) {
   renderMonthly();
 }
 
+// ── CACHE ─────────────────────────────────────────────
+function saveCache(island, graph, parsed, yearly) {
+  try {
+    localStorage.setItem('gh_island', JSON.stringify(island));
+    localStorage.setItem('gh_graph',  JSON.stringify(graph));
+    localStorage.setItem('gh_parsed', JSON.stringify(parsed));
+    localStorage.setItem('gh_yearly', JSON.stringify(yearly));
+  } catch (_) {}
+}
+
+function loadCache() {
+  try {
+    const island = JSON.parse(localStorage.getItem('gh_island'));
+    const graph  = JSON.parse(localStorage.getItem('gh_graph'));
+    const parsed = JSON.parse(localStorage.getItem('gh_parsed'));
+    const yearly = JSON.parse(localStorage.getItem('gh_yearly'));
+    if (island && graph && parsed) return { island, graph, parsed, yearly };
+  } catch (_) {}
+  return null;
+}
+
+// ── TOP LOADER ────────────────────────────────────────
+let _loaderTick = null;
+let _loaderPct  = 0;
+
+function showLoader() {
+  const bar = document.getElementById('top-loader');
+  if (!bar) return;
+  clearInterval(_loaderTick);
+  _loaderPct = 15;
+  bar.style.opacity = '1';
+  bar.style.width   = _loaderPct + '%';
+  _loaderTick = setInterval(() => {
+    _loaderPct += (88 - _loaderPct) * 0.07;
+    bar.style.width = _loaderPct + '%';
+  }, 400);
+}
+
+function hideLoader() {
+  clearInterval(_loaderTick);
+  const bar = document.getElementById('top-loader');
+  if (!bar) return;
+  bar.style.width = '100%';
+  setTimeout(() => {
+    bar.style.opacity = '0';
+    setTimeout(() => { bar.style.width = '0%'; }, 450);
+  }, 200);
+}
+
 // ── LOAD ──────────────────────────────────────────────
 let _loadAttempt = 0;
 
 async function load() {
   _loadAttempt++;
+  showLoader();
+
   const [islandRes, graphRes, yearRes, statsRes, htmlRes] = await Promise.allSettled([
     getJSON(API_ISLAND),
     getJSON(API_GRAPH),
@@ -1034,10 +1098,11 @@ async function load() {
 
   if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
     if (_loadAttempt < 3) {
-      // Silent retry after 4s — don't flash an error to the user
       setTimeout(load, 4000);
       return;
     }
+    hideLoader();
+    _loadAttempt = 0;
     if (!document.querySelector('.hero')) {
       document.getElementById('page').innerHTML = `
         <div class="error-box">
@@ -1056,9 +1121,8 @@ async function load() {
 
   if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
 
-  // Total minutes: prefer actual API value (no &ranks), fallback to HTML scrape
-  const statsData   = statsRes.status  === 'fulfilled' ? statsRes.value?.data  : null;
-  const htmlParsed  = htmlRes.status   === 'fulfilled' ? parseHTML(htmlRes.value) : {};
+  const statsData    = statsRes.status === 'fulfilled' ? statsRes.value?.data  : null;
+  const htmlParsed   = htmlRes.status  === 'fulfilled' ? parseHTML(htmlRes.value) : {};
   const totalMinutes = statsData?.total_ccu ?? htmlParsed.totalMinutes ?? 0;
 
   const parsed = {
@@ -1067,7 +1131,16 @@ async function load() {
     favorites:   statsData?.total_favorites ?? htmlParsed.favorites ?? null,
   };
 
+  saveCache(islandRes.value, graphRes.value, parsed, yearlyDays);
   render(islandRes.value, graphRes.value, parsed);
+  hideLoader();
+}
+
+// Render cached data immediately so the user never sees a blank screen
+const _cached = loadCache();
+if (_cached) {
+  if (_cached.yearly) yearlyDays = _cached.yearly;
+  render(_cached.island, _cached.graph, _cached.parsed);
 }
 
 load();
