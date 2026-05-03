@@ -270,27 +270,42 @@
     /* ── FOOTER ─────────────────────────────── */
     .footer { text-align: center; font-size: 10px; color: #333; padding-top: 4px; }
 
-    /* ── PROJECTION EXPAND ─────────────────── */
-    .card { cursor: pointer; transition: border-color .15s; }
-    .card:active { border-color: #333; }
-    .proj-row {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-      overflow: hidden;
-      max-height: 0;
-      transition: max-height .35s ease, opacity .35s ease;
-      opacity: 0;
+    /* ── ESTIMATIONS SECTION ───────────────── */
+    .estimates-section {
+      background: var(--card);
+      border: 1px dashed #282828;
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
-    .proj-row.open { max-height: 140px; opacity: 1; }
+    .estimates-header { display: flex; align-items: center; gap: 8px; }
+    .estimates-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .estimates-badge {
+      font-size: 10px; font-weight: 700; color: #555;
+      background: #181818; border: 1px solid #282828;
+      border-radius: 4px; padding: 1px 6px;
+      font-style: italic;
+    }
+    .estimates-divider { height: 1px; background: #1c1c1c; }
+    .estimates-group-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      color: #444; margin-bottom: 8px;
+    }
+    .proj-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
     .proj-card {
       background: #0d0d0d;
-      border: 1px solid #1e1e1e;
+      border: 1px solid #1c1c1c;
       border-radius: 12px;
-      padding: 12px 14px;
+      padding: 12px 10px;
       text-align: center;
     }
     .proj-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #444; margin-bottom: 5px; }
-    .proj-value { font-size: 22px; font-weight: 900; color: var(--gold); }
-    .proj-hint  { font-size: 10px; color: #333; margin-top: 14px; text-align: center; }
+    .proj-value { font-size: 20px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
 
     /* ── LOADING / ERROR ────────────────────── */
     .loading { padding: 80px 20px; text-align: center; color: var(--dim); font-size: 13px; }
@@ -389,7 +404,7 @@ function toggleTx() {
 function fetchT(url, ms) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
+  return fetch(url, { signal: ctrl.signal, cache: 'no-store' }).finally(() => clearTimeout(tid));
 }
 
 async function getJSON(url) {
@@ -727,15 +742,6 @@ function _hideTooltip() {
   if (tt) tt.style.display = 'none';
 }
 
-// ── PROJECTION TOGGLE ─────────────────────────────────
-function toggleProj(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const others = ['proj-hour', 'proj-24h'].filter(x => x !== id);
-  others.forEach(o => document.getElementById(o)?.classList.remove('open'));
-  el.classList.toggle('open');
-}
-
 // ── NOTIFICATIONS ─────────────────────────────────────
 async function askNotifPermission() {
   if (!('Notification' in window)) return;
@@ -911,47 +917,61 @@ function render(island, graph, parsed) {
 
     <!-- GAINS/HEURE + 24H -->
     <div class="row2">
-      <div class="card" onclick="toggleProj('proj-hour')">
+      <div class="card">
         <div class="card-label">Gains / heure</div>
         <div class="card-value c-gold">${money(perHour)}</div>
         <div class="card-sub">Au rythme actuel · <strong>${currentPlayers}</strong> joueurs</div>
       </div>
-      <div class="card" onclick="toggleProj('proj-24h')">
+      <div class="card">
         <div class="card-label">Dernières 24h</div>
         <div class="card-value c-gold">${money(todayEarnings)}</div>
         <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées</div>
       </div>
     </div>
 
-    <!-- PROJECTION HEURE -->
-    <div class="proj-row" id="proj-hour">
-      <div class="proj-card">
-        <div class="proj-label">/ jour</div>
-        <div class="proj-value">${money(perHour * 24)}</div>
+    <!-- ESTIMATIONS -->
+    <div class="estimates-section">
+      <div class="estimates-header">
+        <span class="estimates-title">Estimations</span>
+        <span class="estimates-badge">approximatif</span>
       </div>
-      <div class="proj-card">
-        <div class="proj-label">/ mois</div>
-        <div class="proj-value">${money(perHour * 24 * 30)}</div>
-      </div>
-      <div class="proj-card">
-        <div class="proj-label">/ an</div>
-        <div class="proj-value">${money(perHour * 24 * 365)}</div>
-      </div>
-    </div>
 
-    <!-- PROJECTION 24H -->
-    <div class="proj-row" id="proj-24h">
-      <div class="proj-card">
-        <div class="proj-label">/ jour</div>
-        <div class="proj-value">${money(todayEarnings)}</div>
+      <div>
+        <div class="estimates-group-label">Rythme actuel · ${currentPlayers} joueurs</div>
+        <div class="proj-row">
+          <div class="proj-card">
+            <div class="proj-label">/ jour</div>
+            <div class="proj-value">${money(perHour * 24)}</div>
+          </div>
+          <div class="proj-card">
+            <div class="proj-label">/ mois</div>
+            <div class="proj-value">${money(perHour * 24 * 30)}</div>
+          </div>
+          <div class="proj-card">
+            <div class="proj-label">/ an</div>
+            <div class="proj-value">${money(perHour * 24 * 365)}</div>
+          </div>
+        </div>
       </div>
-      <div class="proj-card">
-        <div class="proj-label">/ mois</div>
-        <div class="proj-value">${money(todayEarnings * 30)}</div>
-      </div>
-      <div class="proj-card">
-        <div class="proj-label">/ an</div>
-        <div class="proj-value">${money(todayEarnings * 365)}</div>
+
+      <div class="estimates-divider"></div>
+
+      <div>
+        <div class="estimates-group-label">Basé sur les dernières 24h</div>
+        <div class="proj-row">
+          <div class="proj-card">
+            <div class="proj-label">/ jour</div>
+            <div class="proj-value">${money(todayEarnings)}</div>
+          </div>
+          <div class="proj-card">
+            <div class="proj-label">/ mois</div>
+            <div class="proj-value">${money(todayEarnings * 30)}</div>
+          </div>
+          <div class="proj-card">
+            <div class="proj-label">/ an</div>
+            <div class="proj-value">${money(todayEarnings * 365)}</div>
+          </div>
+        </div>
       </div>
     </div>
 
