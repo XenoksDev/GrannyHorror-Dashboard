@@ -1109,12 +1109,12 @@ async function load() {
   _loadAttempt++;
   showLoader();
 
-  const [islandRes, graphRes, yearRes, statsRes, htmlRes] = await Promise.allSettled([
+  // API_STATS returns HTML (not JSON) — fetch with getText and parse manually
+  const [islandRes, graphRes, yearRes, statsRes] = await Promise.allSettled([
     getJSON(API_ISLAND),
     getJSON(API_GRAPH),
     getJSON(API_YEAR),
-    getJSON(API_STATS),
-    getText(ISLAND_URL),
+    getText(API_STATS),
   ]);
 
   if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
@@ -1142,14 +1142,11 @@ async function load() {
 
   if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
 
-  const statsData    = statsRes.status === 'fulfilled' ? statsRes.value?.data  : null;
-  const htmlParsed   = htmlRes.status  === 'fulfilled' ? parseHTML(htmlRes.value) : {};
-  const totalMinutes = statsData?.total_ccu ?? htmlParsed.totalMinutes ?? 0;
-
+  const htmlParsed = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
   const parsed = {
-    totalMinutes,
-    allTimePeak: statsData?.peak ?? htmlParsed.allTimePeak ?? null,
-    favorites:   statsData?.total_favorites ?? htmlParsed.favorites ?? null,
+    totalMinutes: htmlParsed.totalMinutes ?? 0,
+    allTimePeak:  htmlParsed.allTimePeak  ?? null,
+    favorites:    htmlParsed.favorites    ?? null,
   };
 
   saveCache(islandRes.value, graphRes.value, parsed, yearlyDays);
