@@ -91,6 +91,7 @@
 
     /* ── MAIN CONTENT ───────────────────────── */
     .page { padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; max-width: 480px; margin: 0 auto; }
+    #page  { display: flex; flex-direction: column; gap: 12px; }
 
     /* ── HERO CARD ──────────────────────────── */
     .hero {
@@ -515,7 +516,7 @@ function toggleTx() {
 function fetchT(url, ms) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
+  return fetch(url, { signal: ctrl.signal, cache: 'no-store' }).finally(() => clearTimeout(tid));
 }
 
 async function getJSON(url) {
