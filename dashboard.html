@@ -392,10 +392,11 @@ const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','A
 const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
 
 // ── STATE ─────────────────────────────────────────────
-let yearlyDays      = null;
-let notifPermission = Notification?.permission ?? 'default';
-let withTransactions = true;
+let yearlyDays        = null;
+let notifPermission   = Notification?.permission ?? 'default';
+let withTransactions  = true;
 let _lastIsland = null, _lastGraph = null, _lastParsed = null;
+let _todayActualMinutes = null; // today's player-minutes from the 1d graph, midnight-to-now
 // Paris date for initial state
 const _p = new Intl.DateTimeFormat('en-US', { timeZone:'Europe/Paris', year:'numeric', month:'numeric' }).formatToParts(new Date());
 let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
@@ -489,6 +490,22 @@ function parseHTML(html) {
     allTimePeak:  extractBefore('rank-peak') ?? null,
     favorites:    extractBefore('rank-total_favorites') ?? null,
   };
+}
+
+// ── TODAY MINUTES FROM 1D GRAPH (midnight → now, Paris) ──
+function computeTodayMinutes(graph) {
+  const { start, step, values_avg, values } = graph.data;
+  const avgs = values_avg ?? values ?? [];
+  const now  = parisNow();
+  let total  = 0;
+  avgs.forEach((avg, i) => {
+    const ts = (start + i * step) * 1000;
+    const p  = toParisParts(ts);
+    if (p.year === now.year && p.month === now.month && p.day === now.day) {
+      total += avg * (step / 60);
+    }
+  });
+  return total;
 }
 
 // ── PARIS TIMEZONE HELPERS ────────────────────────────
@@ -810,7 +827,10 @@ function renderMonthly() {
   for (let day = 1; day <= daysInMonth; day++) {
     const isFuture = isCurrentMonth && day > today;
     const isToday  = isCurrentMonth && day === today;
-    const minutes  = dataMap[day] ?? 0;
+    // For today use the 1d graph filtered midnight→now (more accurate than yearly API)
+    const minutes  = isToday && _todayActualMinutes !== null
+      ? _todayActualMinutes
+      : (dataMap[day] ?? 0);
     bars.push({
       day,
       earnings: isFuture ? 0 : (minutes / 1000 * (withTransactions ? MULTIPLIER : 1)),
@@ -898,8 +918,9 @@ function render(island, graph, parsed) {
   const p24h         = graph.data.max_24h    ?? 0;
   const currentPlayers = values.length ? values[values.length - 1] : 0;
 
-  const todayMinutes  = valuesAvg.reduce((s, v) => s + v, 0) * 10;
-  const todayEarnings = todayMinutes * RATE * mult;
+  const todayMinutes      = valuesAvg.reduce((s, v) => s + v, 0) * 10; // full 24h for the card
+  _todayActualMinutes     = computeTodayMinutes(graph);                 // midnight→now for the chart
+  const todayEarnings     = todayMinutes * RATE * mult;
 
   const totalMinutes  = parsed.totalMinutes ?? 0;
   const totalEarnings = totalMinutes * RATE * mult;
