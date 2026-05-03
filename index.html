@@ -728,7 +728,7 @@ function _drawBars(highlightIdx) {
 
   ctx.clearRect(0, 0, W, H);
 
-  const maxE    = Math.max(...bars.map(b => b.earnings), 0.01);
+  const maxE    = Math.max(...bars.map(b => Math.max(b.earnings, b.predicted ?? 0)), 0.01);
   const scale   = _niceScale(maxE);
   const gridMax = Math.ceil(maxE / scale) * scale;
 
@@ -767,6 +767,39 @@ function _drawBars(highlightIdx) {
     const isHL = i === highlightIdx;
 
     _barRects.push({ x, w: barW, bar: b, idx: i });
+
+    // Ghost prediction bar (today only)
+    if (b.isToday && b.predicted > b.earnings) {
+      const ghostH = Math.max(3, (b.predicted / gridMax) * (chartH - 8));
+      const ghostY = chartH - ghostH;
+      const rg     = Math.min(4, barW / 2);
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle   = '#ffc107';
+      ctx.beginPath();
+      ctx.moveTo(x + rg, ghostY);
+      ctx.lineTo(x + barW - rg, ghostY);
+      ctx.quadraticCurveTo(x + barW, ghostY, x + barW, ghostY + rg);
+      ctx.lineTo(x + barW, chartH);
+      ctx.lineTo(x, chartH);
+      ctx.lineTo(x, ghostY + rg);
+      ctx.quadraticCurveTo(x, ghostY, x + rg, ghostY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // Dashed top line
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#ffc107';
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, ghostY);
+      ctx.lineTo(x + barW, ghostY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
 
     // Color
     let base, glow;
@@ -882,11 +915,15 @@ function _showTooltip(cx, cy, bar) {
   const label = bar.isToday ? "Aujourd'hui" : bar.isFuture ? 'À venir' : `Jour ${bar.day}`;
   const val   = bar.isFuture ? '—' : money(bar.earnings);
   const color = bar.isToday ? '#ffc107' : bar.isFuture ? '#444' : '#00e676';
+  const predLine = bar.isToday && bar.predicted > bar.earnings
+    ? `<div class="tt-label" style="color:rgba(255,193,7,.6)">→ fin de journée ~${money(bar.predicted)}</div>`
+    : '';
 
   tt.innerHTML = `
     <div class="tt-day">${label}</div>
     <div class="tt-val" style="color:${color}">${val}</div>
-    <div class="tt-label">${bar.isFuture ? 'Pas encore passé' : 'Gains estimés'}</div>`;
+    <div class="tt-label">${bar.isFuture ? 'Pas encore passé' : 'Gains estimés'}</div>
+    ${predLine}`;
   tt.style.display = 'block';
 
   // Position: above cursor, avoid edges
@@ -952,9 +989,10 @@ function renderMonthly() {
     const minutes  = isToday && _todayActualMinutes !== null
       ? _todayActualMinutes
       : (dataMap[day] ?? 0);
+    const earnings = isFuture ? 0 : (minutes / 1000 * (withTransactions ? MULTIPLIER : 1));
     bars.push({
       day,
-      earnings: isFuture ? 0 : (minutes / 1000 * (withTransactions ? MULTIPLIER : 1)),
+      earnings,
       isPast:   !isFuture && !isToday,
       isToday,
       isFuture,
@@ -974,6 +1012,7 @@ function renderMonthly() {
     const todayExtrapolated = todayBar && hoursElapsed > 0
       ? todayBar.earnings * (24 / hoursElapsed)
       : (todayBar?.earnings ?? 0);
+    if (todayBar) todayBar.predicted = todayExtrapolated;
     const pastDays          = bars.filter(b => b.isPast).length;
     const avgPerDay         = (pastEarnings + todayExtrapolated) / (pastDays + 1);
     projection              = avgPerDay * daysInMonth;
