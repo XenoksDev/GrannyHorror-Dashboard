@@ -462,7 +462,7 @@
     Voir sur fortnite.gg
   </a>
 
-  <div class="footer">Mis à jour à <span id="update-time">--:--</span> · refresh auto 60s</div>
+  <div class="footer">Mis à jour à <span id="update-time">--:--</span> · refresh auto 60s · 🇺🇸 <span id="et-time">--:--</span> ET</div>
 </div>
 
 <div id="chart-tooltip">
@@ -645,6 +645,13 @@ function toParisParts(tsMs) {
 function parisTimeStr() {
   return new Intl.DateTimeFormat('fr-FR', {
     timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit',
+  }).format(new Date());
+}
+
+function etTimeStr() {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit',
+    hour12: true,
   }).format(new Date());
 }
 
@@ -1072,11 +1079,11 @@ function render(island, graph, parsed) {
     <!-- JOUEURS LIVE -->
     <div class="hero">
       <div class="hero-label">Joueurs en ce moment</div>
-      <div class="hero-number c-green">${currentPlayers}</div>
-      ${nextMilestone ? `<div class="hero-sub">Prochain milestone : <strong style="color:var(--green)">${nextMilestone}</strong></div>` : ''}
+      <div class="hero-number c-green">${fmt(currentPlayers)}</div>
+      ${nextMilestone ? `<div class="hero-sub">Prochain milestone : <strong style="color:var(--green)">${fmt(nextMilestone)}</strong></div>` : ''}
       <div class="hero-peaks">
         <div class="peak-item">
-          <div class="pv c-blue">${p24h}</div>
+          <div class="pv c-blue">${fmt(p24h)}</div>
           <div class="pl">Peak 24h</div>
         </div>
         <div class="peak-item">
@@ -1095,7 +1102,7 @@ function render(island, graph, parsed) {
       <div class="card">
         <div class="card-label">Gains / heure</div>
         <div class="card-value c-gold">${money(perHour)}</div>
-        <div class="card-sub">Au rythme actuel · <strong>${currentPlayers}</strong> joueurs</div>
+        <div class="card-sub">Au rythme actuel · <strong>${fmt(currentPlayers)}</strong> joueurs</div>
       </div>
       <div class="card">
         <div class="card-label">Dernières 24h</div>
@@ -1112,7 +1119,7 @@ function render(island, graph, parsed) {
       </div>
 
       <div>
-        <div class="estimates-group-label">Rythme actuel · ${currentPlayers} joueurs</div>
+        <div class="estimates-group-label">Rythme actuel · ${fmt(currentPlayers)} joueurs</div>
         <div class="proj-row">
           <div class="proj-card">
             <div class="proj-label">/ jour</div>
@@ -1167,6 +1174,8 @@ function render(island, graph, parsed) {
   // Update static elements outside #page
   const timeEl = document.getElementById('update-time');
   if (timeEl) timeEl.textContent = time;
+  const etEl = document.getElementById('et-time');
+  if (etEl) etEl.textContent = etTimeStr();
   const simEl = document.getElementById('sim-section');
   if (simEl) simEl.style.display = '';
   updateSim(currentPlayers);
@@ -1328,6 +1337,14 @@ if (_cached) {
 
 load();
 setInterval(load, REFRESH_MS);
+
+// ── ET CLOCK (live, updates every 30s) ───────────────
+function tickET() {
+  const el = document.getElementById('et-time');
+  if (el) el.textContent = etTimeStr();
+}
+tickET();
+setInterval(tickET, 30_000);
 
 // ── SERVICE WORKER ────────────────────────────────────
 if ('serviceWorker' in navigator) {
