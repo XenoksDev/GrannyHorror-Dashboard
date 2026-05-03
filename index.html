@@ -412,7 +412,7 @@ function toggleTx() {
   pill?.classList.toggle('on', withTransactions);
   if (onLabel)  onLabel.style.color  = withTransactions ? 'var(--gold)' : 'var(--dim)';
   if (offLabel) offLabel.style.color = withTransactions ? 'var(--dim)'  : 'var(--text)';
-  if (_lastIsland) render(_lastIsland, _lastGraph, _lastParsed);
+  if (_lastGraph) render(_lastIsland, _lastGraph, _lastParsed);
 }
 
 // ── FETCH ─────────────────────────────────────────────
@@ -1137,18 +1137,14 @@ async function load() {
   _loadAttempt++;
   showLoader();
 
-  const [islandRes, graphRes, yearRes, statsRes] = await Promise.allSettled([
-    getJSON(API_ISLAND),
+  // Phase 1 — only what's needed to show numbers (2 requests, fast)
+  const [graphRes, statsRes] = await Promise.allSettled([
     getJSON(API_GRAPH),
-    getJSON(API_YEAR),
-    getText(ISLAND_URL),   // island page confirmed to have rank-total_ccu in HTML
+    getText(ISLAND_URL),
   ]);
 
-  if (islandRes.status === 'rejected' || graphRes.status === 'rejected') {
-    if (_loadAttempt < 3) {
-      setTimeout(load, 4000);
-      return;
-    }
+  if (graphRes.status === 'rejected') {
+    if (_loadAttempt < 3) { setTimeout(load, 4000); return; }
     hideLoader();
     _loadAttempt = 0;
     if (!document.querySelector('.hero')) {
@@ -1167,8 +1163,6 @@ async function load() {
   }
   _loadAttempt = 0;
 
-  if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
-
   const htmlParsed = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
   const parsed = {
     totalMinutes: htmlParsed.totalMinutes || 0,
@@ -1176,9 +1170,16 @@ async function load() {
     favorites:    htmlParsed.favorites    ?? null,
   };
 
-  saveCache(islandRes.value, graphRes.value, parsed, yearlyDays);
-  render(islandRes.value, graphRes.value, parsed);
+  saveCache(null, graphRes.value, parsed, yearlyDays);
+  render(null, graphRes.value, parsed);
   hideLoader();
+
+  // Phase 2 — yearly data for monthly chart, loads in background
+  getJSON(API_YEAR).then(yearData => {
+    yearlyDays = aggregateByDay(yearData);
+    saveCache(null, graphRes.value, parsed, yearlyDays);
+    renderMonthly();
+  }).catch(() => {});
 }
 
 // Render cached data immediately so the user never sees a blank screen
