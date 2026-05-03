@@ -483,20 +483,26 @@ function parseHTML(html) {
   if (!html) return {};
   const h = html.replace(/&amp;/g, '&');
 
-  // HTML uses single quotes: id='rank-x' — search both quote styles
-  function extractBefore(id) {
+  // Target: >(number) immediately before <a ... id='rank-X'>
+  // e.g. >314.9K <a href='...' id='rank-total_ccu'>#</a>
+  function extractStat(id) {
+    const re = new RegExp(`>([\\d.]+[KMB]?)\\s*<a[^>]+id=['"]${id}['"]`);
+    const m  = h.match(re);
+    if (m) return m[1];
+
+    // Fallback: last number in the 200 chars before the id (less accurate)
     let pos = h.indexOf(`id='${id}'`);
     if (pos === -1) pos = h.indexOf(`id="${id}"`);
     if (pos === -1) return null;
-    const before = h.slice(Math.max(0, pos - 400), pos);
+    const before  = h.slice(Math.max(0, pos - 200), pos);
     const matches = [...before.matchAll(/>([\d.]+[KMB]?)/g)];
     return matches.length ? matches[matches.length - 1][1] : null;
   }
 
   return {
-    totalMinutes: parseK(extractBefore('rank-total_ccu')),
-    allTimePeak:  extractBefore('rank-peak') ?? null,
-    favorites:    extractBefore('rank-total_favorites') ?? null,
+    totalMinutes: parseK(extractStat('rank-total_ccu')),
+    allTimePeak:  extractStat('rank-peak') ?? null,
+    favorites:    extractStat('rank-total_favorites') ?? null,
   };
 }
 
