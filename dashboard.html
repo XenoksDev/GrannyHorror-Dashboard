@@ -849,10 +849,24 @@ function renderMonthly() {
   }
 
   // Totals (only past + today)
-  const monthTotal  = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.earnings, 0);
-  const daysPassed  = isCurrentMonth ? today : daysInMonth;
-  const avgPerDay   = daysPassed > 0 ? monthTotal / daysPassed : 0;
-  const projection  = avgPerDay * daysInMonth;
+  const monthTotal     = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.earnings, 0);
+  const daysPassed     = isCurrentMonth ? today : daysInMonth;
+
+  // Projection: extrapolate today's partial data to avoid bias at 3am
+  let projection;
+  if (isCurrentMonth) {
+    const pastEarnings      = bars.filter(b => b.isPast).reduce((s, b) => s + b.earnings, 0);
+    const todayBar          = bars.find(b => b.isToday);
+    const hoursElapsed      = now.hour + now.minute / 60;
+    const todayExtrapolated = todayBar && hoursElapsed > 0
+      ? todayBar.earnings * (24 / hoursElapsed)
+      : (todayBar?.earnings ?? 0);
+    const pastDays          = bars.filter(b => b.isPast).length;
+    const avgPerDay         = (pastEarnings + todayExtrapolated) / (pastDays + 1);
+    projection              = avgPerDay * daysInMonth;
+  } else {
+    projection = daysPassed > 0 ? (monthTotal / daysPassed) * daysInMonth : 0;
+  }
 
   // Month pills
   const pills = MONTHS_SHORT.map((name, i) => {
@@ -1150,9 +1164,11 @@ async function load() {
 
   if (yearRes.status === 'fulfilled') yearlyDays = aggregateByDay(yearRes.value);
 
-  const htmlParsed = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
+  const htmlParsed  = statsRes.status === 'fulfilled' ? parseHTML(statsRes.value) : {};
+  // Fallback: sum yearlyDays if HTML scrape returns 0
+  const yearTotal   = yearlyDays ? Math.round(yearlyDays.reduce((s, d) => s + d.minutes, 0)) : 0;
   const parsed = {
-    totalMinutes: htmlParsed.totalMinutes ?? 0,
+    totalMinutes: htmlParsed.totalMinutes || yearTotal || 0,
     allTimePeak:  htmlParsed.allTimePeak  ?? null,
     favorites:    htmlParsed.favorites    ?? null,
   };
