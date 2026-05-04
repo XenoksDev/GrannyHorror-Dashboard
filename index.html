@@ -162,6 +162,8 @@
     .card-sub { font-size: 11px; color: var(--dim); margin-top: 6px; line-height: 1.4; }
     .card-sub strong { color: var(--text); font-weight: 600; }
     .rng-sep { display: inline-block; margin: 0 4px; color: var(--dim); font-weight: 600; }
+    .toggleable-val { cursor: pointer; user-select: none; transition: opacity .15s; }
+    .toggleable-val:hover { opacity: .75; }
 
     .c-gold   { color: var(--gold); }
     .c-purple { color: var(--purple); }
@@ -549,6 +551,7 @@ const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep'
 let yearlyDays        = null;
 let notifPermission   = Notification?.permission ?? 'default';
 let withTransactions  = true;
+let showRange         = false;  // false = affiche la moyenne · true = affiche le range low–high
 let _lastIsland = null, _lastGraph = null, _lastParsed = null;
 let _todayActualMinutes = null; // today's player-minutes from the 1d graph, midnight-to-now
 // Paris date for initial state
@@ -565,6 +568,13 @@ function toggleTx() {
   pill?.classList.toggle('on', withTransactions);
   if (onLabel)  onLabel.style.color  = withTransactions ? 'var(--gold)' : 'var(--dim)';
   if (offLabel) offLabel.style.color = withTransactions ? 'var(--dim)'  : 'var(--text)';
+  if (_lastGraph) render(_lastIsland, _lastGraph, _lastParsed);
+  updateSim();
+}
+
+// Toggle moyenne ↔ range — déclenché par clic sur n'importe quel chiffre
+function toggleRange() {
+  showRange = !showRange;
   if (_lastGraph) render(_lastIsland, _lastGraph, _lastParsed);
   updateSim();
 }
@@ -755,10 +765,15 @@ function money(dollars) {
   if (dollars >= 1000) return '$' + (dollars / 1000).toFixed(2) + 'K';
   return '$' + dollars.toFixed(2);
 }
-// Range : "$X – $Y" (or single value if low ≈ high, e.g. tx désactivé)
+// Range affichage : "$X – $Y" (ou single si low ≈ high)
 function moneyR(low, high) {
   if (Math.abs(high - low) < 0.005) return money(low);
   return `${money(low)}<span class="rng-sep">–</span>${money(high)}`;
+}
+// Affichage selon le mode global : moyenne par défaut, range si toggle on
+function moneyV(low, high) {
+  if (showRange) return moneyR(low, high);
+  return money((low + high) / 2);
 }
 function fmt(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
@@ -996,12 +1011,12 @@ function _showTooltip(cx, cy, bar) {
   const label = bar.isToday ? "Aujourd'hui" : bar.isFuture ? 'À venir' : `Jour ${bar.day}`;
   const low   = bar.low  ?? bar.earnings ?? 0;
   const high  = bar.high ?? bar.earnings ?? 0;
-  const val   = bar.isFuture ? '—' : moneyR(low, high);
+  const val   = bar.isFuture ? '—' : moneyV(low, high);
   const color = bar.isToday ? '#ffc107' : bar.isFuture ? '#444' : '#00e676';
   const predLow  = bar.predLow  ?? 0;
   const predHigh = bar.predHigh ?? bar.predicted ?? 0;
   const predLine = bar.isToday && predHigh > high
-    ? `<div class="tt-label" style="color:rgba(255,193,7,.6)">→ fin de journée ~${moneyR(predLow, predHigh)}</div>`
+    ? `<div class="tt-label" style="color:rgba(255,193,7,.6)">→ fin de journée ~${moneyV(predLow, predHigh)}</div>`
     : '';
 
   tt.innerHTML = `
@@ -1148,11 +1163,11 @@ function renderMonthly() {
       <div class="monthly-summary">
         <div class="msumm">
           <div class="ml">${isCurrentMonth ? 'Ce mois-ci' : 'Total du mois'}</div>
-          <div class="mv c-gold ${withTransactions ? 'range' : ''}">${moneyR(monthTotalLow, monthTotalHigh)}</div>
+          <div class="mv c-gold toggleable-val ${(showRange && withTransactions) ? 'range' : ''}">${moneyV(monthTotalLow, monthTotalHigh)}</div>
         </div>
         <div class="msumm">
           <div class="ml">Projection / mois</div>
-          <div class="mv c-purple ${withTransactions ? 'range' : ''}">${moneyR(projLow, projHigh)}</div>
+          <div class="mv c-purple toggleable-val ${(showRange && withTransactions) ? 'range' : ''}">${moneyV(projLow, projHigh)}</div>
         </div>
       </div>
     </div>
@@ -1187,7 +1202,7 @@ function render(island, graph, parsed) {
   _lastIsland = island; _lastGraph = graph; _lastParsed = parsed;
   const mLow  = withTransactions ? MULT_LOW  : 1;
   const mHigh = withTransactions ? MULT_HIGH : 1;
-  const rangeCls = withTransactions ? 'range' : '';
+  const rangeCls = (showRange && withTransactions) ? 'range' : '';
   const now          = parisNow();
   const values       = graph.data.values     ?? [];
   const valuesAvg    = graph.data.values_avg ?? values;
@@ -1245,12 +1260,12 @@ function render(island, graph, parsed) {
     <div class="row2">
       <div class="card">
         <div class="card-label">Gains / heure</div>
-        <div class="card-value c-gold ${rangeCls}">${moneyR(perHourLow, perHourHigh)}</div>
+        <div class="card-value c-gold toggleable-val ${rangeCls}">${moneyV(perHourLow, perHourHigh)}</div>
         <div class="card-sub">Au rythme actuel · <strong>${fmt(currentPlayers)}</strong> joueurs</div>
       </div>
       <div class="card">
         <div class="card-label">Dernières 24h</div>
-        <div class="card-value c-gold ${rangeCls}">${moneyR(todayEarnLow, todayEarnHigh)}</div>
+        <div class="card-value c-gold toggleable-val ${rangeCls}">${moneyV(todayEarnLow, todayEarnHigh)}</div>
         <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées</div>
       </div>
     </div>
@@ -1259,7 +1274,7 @@ function render(island, graph, parsed) {
     <div class="estimates-section">
       <div class="estimates-header">
         <span class="estimates-title">Estimations</span>
-        <span class="estimates-badge">range ×${MULT_LOW}–${MULT_HIGH}</span>
+        <span class="estimates-badge">${showRange ? `range ×${MULT_LOW}–${MULT_HIGH}` : `moyenne ×${MULT_MID.toFixed(1)}`}</span>
       </div>
 
       <div>
@@ -1267,15 +1282,15 @@ function render(island, graph, parsed) {
         <div class="proj-row">
           <div class="proj-card">
             <div class="proj-label">/ jour</div>
-            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24, perHourHigh * 24)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(perHourLow * 24, perHourHigh * 24)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ mois</div>
-            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24 * 30, perHourHigh * 24 * 30)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(perHourLow * 24 * 30, perHourHigh * 24 * 30)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ an</div>
-            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24 * 365, perHourHigh * 24 * 365)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(perHourLow * 24 * 365, perHourHigh * 24 * 365)}</div>
           </div>
         </div>
       </div>
@@ -1287,15 +1302,15 @@ function render(island, graph, parsed) {
         <div class="proj-row">
           <div class="proj-card">
             <div class="proj-label">/ jour</div>
-            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow, todayEarnHigh)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(todayEarnLow, todayEarnHigh)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ mois</div>
-            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow * 30, todayEarnHigh * 30)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(todayEarnLow * 30, todayEarnHigh * 30)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ an</div>
-            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow * 365, todayEarnHigh * 365)}</div>
+            <div class="proj-value toggleable-val ${rangeCls}">${moneyV(todayEarnLow * 365, todayEarnHigh * 365)}</div>
           </div>
         </div>
       </div>
@@ -1305,8 +1320,8 @@ function render(island, graph, parsed) {
     <div class="card-wide">
       <div class="card-label">Gains totaux estimés</div>
       <div class="total-row">
-        <div class="total-big c-purple ${rangeCls}">${moneyR(totalEarnLow, totalEarnHigh)}</div>
-        <div class="total-tag">${withTransactions ? `×${MULT_LOW}–${MULT_HIGH}` : '×1'}</div>
+        <div class="total-big c-purple toggleable-val ${rangeCls}">${moneyV(totalEarnLow, totalEarnHigh)}</div>
+        <div class="total-tag">${withTransactions ? (showRange ? `×${MULT_LOW}–${MULT_HIGH}` : `×${MULT_MID.toFixed(1)}`) : '×1'}</div>
       </div>
       <div class="card-sub" style="margin-top:8px">
         Basé sur <strong>${fmt(totalMinutes)}</strong> min jouées · $1 = 1 000 min
@@ -1341,10 +1356,10 @@ function updateSim(defaultPlayers) {
   const perHrHi  = players * 60 * RATE * mHigh;
   const el = document.getElementById('sim-earn-results');
   if (el) el.innerHTML = `
-    <div class="sim-r"><div class="sim-rl">/ heure</div><div class="sim-rv">${moneyR(perHrLo, perHrHi)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ jour</div><div class="sim-rv">${moneyR(perHrLo * 24, perHrHi * 24)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ mois</div><div class="sim-rv">${moneyR(perHrLo * 24 * 30, perHrHi * 24 * 30)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ an</div><div class="sim-rv">${moneyR(perHrLo * 24 * 365, perHrHi * 24 * 365)}</div></div>`;
+    <div class="sim-r"><div class="sim-rl">/ heure</div><div class="sim-rv toggleable-val">${moneyV(perHrLo, perHrHi)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ jour</div><div class="sim-rv toggleable-val">${moneyV(perHrLo * 24, perHrHi * 24)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ mois</div><div class="sim-rv toggleable-val">${moneyV(perHrLo * 24 * 30, perHrHi * 24 * 30)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ an</div><div class="sim-rv toggleable-val">${moneyV(perHrLo * 24 * 365, perHrHi * 24 * 365)}</div></div>`;
   updateCampaign();
 }
 
@@ -1368,11 +1383,11 @@ function updateCampaign() {
     <div class="sim-roi-row">
       <div>
         <div class="sim-rl">Gains campagne</div>
-        <div class="sim-rv" style="color:var(--blue);font-size:16px">${moneyR(extraLow, extraHigh)}</div>
+        <div class="sim-rv toggleable-val" style="color:var(--blue);font-size:16px">${moneyV(extraLow, extraHigh)}</div>
       </div>
       <div style="text-align:right">
         <div class="sim-rl">${profitLow >= 0 ? 'Profit net' : (profitHigh >= 0 ? 'Profit / perte' : 'Perte nette')}</div>
-        <div class="sim-rv" style="color:${isWin ? 'var(--green)' : '#ef5350'};font-size:16px">${moneyR(profitLow, profitHigh)}</div>
+        <div class="sim-rv toggleable-val" style="color:${isWin ? 'var(--green)' : '#ef5350'};font-size:16px">${moneyV(profitLow, profitHigh)}</div>
       </div>
     </div>
     ${budget > 0 ? `<div class="sim-breakeven">Break-even : <strong>${beLow}–${beHigh} joueurs</strong> en moyenne sur ${days}j</div>` : ''}`;
@@ -1500,6 +1515,11 @@ function tickClocks() {
 }
 tickClocks();
 setInterval(tickClocks, 1000);
+
+// ── CLIC SUR UN CHIFFRE → TOGGLE RANGE/MOYENNE ───────
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.toggleable-val')) toggleRange();
+});
 
 // ── SERVICE WORKER ────────────────────────────────────
 if ('serviceWorker' in navigator) {
