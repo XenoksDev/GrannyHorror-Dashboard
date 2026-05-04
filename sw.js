@@ -1,4 +1,4 @@
-const CACHE = 'granny-v1';
+const CACHE = 'granny-v2';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icons/icon.svg'];
 
 // Install: cache the app shell
@@ -17,7 +17,7 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Fetch: network-first for APIs, cache-first for the app shell
+// Fetch: network-first for HTML (so updates are picked up), cache-first for assets
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
@@ -31,7 +31,22 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell → cache-first, update in background
+  // HTML / navigations → network-first (fresh app code), cache fallback offline
+  const isHTML = e.request.mode === 'navigate'
+    || (e.request.headers.get('accept') || '').includes('text/html')
+    || url.pathname.endsWith('.html');
+
+  if (isHTML) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+        return res;
+      }).catch(async () => (await caches.match(e.request)) ?? new Response('Offline', { status: 503 }))
+    );
+    return;
+  }
+
+  // Other assets (icons, manifest, etc.) → cache-first, update in background
   e.respondWith(
     caches.open(CACHE).then(async cache => {
       const cached = await cache.match(e.request);
