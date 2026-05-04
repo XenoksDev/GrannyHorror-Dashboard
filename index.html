@@ -158,8 +158,10 @@
     }
     .card-label { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
     .card-value { font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+    .card-value.range { font-size: 21px; }
     .card-sub { font-size: 11px; color: var(--dim); margin-top: 6px; line-height: 1.4; }
     .card-sub strong { color: var(--text); font-weight: 600; }
+    .rng-sep { display: inline-block; margin: 0 4px; color: var(--dim); font-weight: 600; }
 
     .c-gold   { color: var(--gold); }
     .c-purple { color: var(--purple); }
@@ -175,6 +177,7 @@
     }
     .total-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .total-big { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+    .total-big.range { font-size: 32px; letter-spacing: -1px; }
     .total-tag {
       font-size: 10px; font-weight: 700; letter-spacing: 1px;
       background: rgba(179,157,219,.15);
@@ -260,7 +263,7 @@
       box-shadow: 0 8px 24px rgba(0,0,0,.6);
     }
     .tt-day   { font-size: 10px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-    .tt-val   { font-size: 20px; font-weight: 900; color: #ffc107; line-height: 1; }
+    .tt-val   { font-size: 16px; font-weight: 900; color: #ffc107; line-height: 1.1; white-space: nowrap; }
     .tt-label { font-size: 10px; color: #555; margin-top: 3px; }
 
     /* Monthly summary */
@@ -276,6 +279,7 @@
     }
     .msumm .ml { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
     .msumm .mv { font-size: 22px; font-weight: 900; }
+    .msumm .mv.range { font-size: 14px; line-height: 1.2; }
 
     /* Loading bar chart */
     .chart-loading { height: 120px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 12px; }
@@ -355,6 +359,7 @@
     }
     .proj-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #444; margin-bottom: 5px; }
     .proj-value { font-size: 20px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+    .proj-value.range { font-size: 13px; line-height: 1.15; }
 
     /* ── LOADING / ERROR ────────────────────── */
     .loading { padding: 80px 20px; text-align: center; color: var(--dim); font-size: 13px; }
@@ -460,7 +465,7 @@
   <div class="toggle-pill on" id="tx-toggle" onclick="toggleTx()">
     <div class="toggle-thumb"></div>
   </div>
-  <span class="tx-label active" id="tx-on-label">×2.7 transactions</span>
+  <span class="tx-label active" id="tx-on-label">×2.9–3.5 transactions</span>
 </div>
 
 <div class="page">
@@ -531,7 +536,10 @@ const PROXY2       = 'https://corsproxy.io/?';
 const REFRESH_MS   = 60_000;
 
 const RATE       = 1 / 1000;   // $1 per 1000 player-minutes
-const MULTIPLIER = 2.7;        // ×2.7 (playtime + transactions)
+// Range d'estimation (playtime + transactions) — calibré sur ventes réelles
+const MULT_LOW   = 2.9;        // borne basse
+const MULT_HIGH  = 3.5;        // borne haute
+const MULT_MID   = (MULT_LOW + MULT_HIGH) / 2; // 3.2 — valeur centrale
 const MILESTONES = [50, 100, 150, 200, 250, 300, 350, 400, 500];
 
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -738,13 +746,19 @@ function getDaysForMonth(year, month) {
 }
 
 function earningForDay(dayData) {
-  return dayData.minutes / 1000 * MULTIPLIER;
+  const base = dayData.minutes / 1000;
+  return { low: base * MULT_LOW, mid: base * MULT_MID, high: base * MULT_HIGH };
 }
 
 // ── MONEY FORMAT ──────────────────────────────────────
 function money(dollars) {
   if (dollars >= 1000) return '$' + (dollars / 1000).toFixed(2) + 'K';
   return '$' + dollars.toFixed(2);
+}
+// Range : "$X – $Y" (or single value if low ≈ high, e.g. tx désactivé)
+function moneyR(low, high) {
+  if (Math.abs(high - low) < 0.005) return money(low);
+  return `${money(low)}<span class="rng-sep">–</span>${money(high)}`;
 }
 function fmt(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
@@ -787,7 +801,7 @@ function _drawBars(highlightIdx) {
 
   ctx.clearRect(0, 0, W, H);
 
-  const maxE    = Math.max(...bars.map(b => Math.max(b.earnings, b.predicted ?? 0)), 0.01);
+  const maxE    = Math.max(...bars.map(b => Math.max(b.high ?? b.earnings ?? 0, b.predHigh ?? b.predicted ?? 0)), 0.01);
   const scale   = _niceScale(maxE);
   const gridMax = Math.ceil(maxE / scale) * scale;
 
@@ -820,52 +834,51 @@ function _drawBars(highlightIdx) {
 
   bars.forEach((b, i) => {
     const x    = LEFT + gap + i * (barW + gap);
-    const barH = b.earnings > 0 ? Math.max(3, (b.earnings / gridMax) * (chartH - 8)) : 0;
-    const y    = chartH - barH;
-    const r    = Math.min(4, barW / 2);
-    const isHL = i === highlightIdx;
+    const low  = b.low  ?? b.earnings ?? 0;
+    const mid  = b.mid  ?? b.earnings ?? 0;
+    const high = b.high ?? b.earnings ?? 0;
+    const yLow  = chartH - (low  / gridMax) * (chartH - 8);
+    const yMid  = chartH - (mid  / gridMax) * (chartH - 8);
+    const yHigh = chartH - (high / gridMax) * (chartH - 8);
+    const bodyTop = yHigh;
+    const bodyH   = Math.max(0, yLow - yHigh);
+    const r       = Math.min(3, barW / 2);
+    const isHL    = i === highlightIdx;
 
     _barRects.push({ x, w: barW, bar: b, idx: i });
 
-    // Ghost prediction bar (today only)
-    if (b.isToday && b.predicted > b.earnings) {
-      const ghostH = Math.max(3, (b.predicted / gridMax) * (chartH - 8));
-      const ghostY = chartH - ghostH;
-      const rg     = Math.min(4, barW / 2);
+    // Ghost prediction range (today only) : extension translucide jusqu'au range projeté
+    const predLow  = b.predLow  ?? 0;
+    const predHigh = b.predHigh ?? b.predicted ?? 0;
+    if (b.isToday && predHigh > high) {
+      const yPredLow  = chartH - (Math.max(predLow, low) / gridMax) * (chartH - 8);
+      const yPredHigh = chartH - (predHigh / gridMax) * (chartH - 8);
+      const ghostH    = Math.max(2, yPredLow - yPredHigh);
       ctx.save();
       ctx.globalAlpha = 0.18;
       ctx.fillStyle   = '#ffc107';
-      ctx.beginPath();
-      ctx.moveTo(x + rg, ghostY);
-      ctx.lineTo(x + barW - rg, ghostY);
-      ctx.quadraticCurveTo(x + barW, ghostY, x + barW, ghostY + rg);
-      ctx.lineTo(x + barW, chartH);
-      ctx.lineTo(x, chartH);
-      ctx.lineTo(x, ghostY + rg);
-      ctx.quadraticCurveTo(x, ghostY, x + rg, ghostY);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(x, yPredHigh, barW, ghostH);
       ctx.restore();
-      // Dashed top line
+      // Trait pointillé sur le haut prédit
       ctx.save();
-      ctx.globalAlpha = 0.45;
+      ctx.globalAlpha = 0.5;
       ctx.strokeStyle = '#ffc107';
       ctx.lineWidth   = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
-      ctx.moveTo(x, ghostY);
-      ctx.lineTo(x + barW, ghostY);
+      ctx.moveTo(x, yPredHigh);
+      ctx.lineTo(x + barW, yPredHigh);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
     }
 
-    // Color
-    let base, glow;
-    if (b.isToday)        { base = '#ffc107'; glow = 'rgba(255,193,7,.25)'; }
-    else if (b.isFuture)  { base = '#191919'; glow = null; }
-    else if (b.earnings > 0) { base = '#00e676'; glow = 'rgba(0,230,118,.2)'; }
-    else                  { base = '#1a1a1a'; glow = null; }
+    // Couleurs
+    let topCol, botCol, midCol, glow;
+    if (b.isToday)             { topCol = isHL ? '#ffe082' : '#ffc107'; botCol = isHL ? '#ff8f00' : '#e65100'; midCol = '#fff3c4'; glow = 'rgba(255,193,7,.25)'; }
+    else if (b.isFuture)       { topCol = '#222'; botCol = '#181818'; midCol = '#2a2a2a'; glow = null; }
+    else if (high > 0)         { topCol = isHL ? '#69f0ae' : '#00e676'; botCol = isHL ? '#00c853' : '#00897b'; midCol = '#b9f6ca'; glow = 'rgba(0,230,118,.2)'; }
+    else                       { topCol = '#1c1c1c'; botCol = '#1a1a1a'; midCol = null; glow = null; }
 
     // Glow on hover
     if (isHL && glow) {
@@ -873,36 +886,45 @@ function _drawBars(highlightIdx) {
       ctx.fillRect(x - 3, 0, barW + 6, chartH);
     }
 
-    if (barH > 0) {
-      // Gradient bar
-      const grad = ctx.createLinearGradient(0, y, 0, chartH);
-      if (b.isToday) {
-        grad.addColorStop(0, isHL ? '#ffe082' : '#ffc107');
-        grad.addColorStop(1, isHL ? '#ff8f00' : '#e65100');
-      } else if (b.isFuture) {
-        grad.addColorStop(0, '#222');
-        grad.addColorStop(1, '#181818');
-      } else {
-        grad.addColorStop(0, isHL ? '#69f0ae' : '#00e676');
-        grad.addColorStop(1, isHL ? '#00c853' : '#00897b');
-      }
-
+    if (high > 0) {
+      // Wick : trait fin de zéro jusqu'au haut de la bougie
+      const wickX = x + barW / 2;
+      ctx.strokeStyle = botCol;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth   = 1;
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + barW - r, y);
-      ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
-      ctx.lineTo(x + barW, chartH);
-      ctx.lineTo(x, chartH);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
+      ctx.moveTo(wickX, chartH);
+      ctx.lineTo(wickX, yHigh);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Body : rectangle entre low et high (la bougie)
+      const grad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+      grad.addColorStop(0, topCol);
+      grad.addColorStop(1, botCol);
       ctx.fillStyle = grad;
+      const drawH = Math.max(2, bodyH);
+      ctx.beginPath();
+      ctx.moveTo(x + r, bodyTop);
+      ctx.lineTo(x + barW - r, bodyTop);
+      ctx.quadraticCurveTo(x + barW, bodyTop, x + barW, bodyTop + r);
+      ctx.lineTo(x + barW, bodyTop + drawH - r);
+      ctx.quadraticCurveTo(x + barW, bodyTop + drawH, x + barW - r, bodyTop + drawH);
+      ctx.lineTo(x + r, bodyTop + drawH);
+      ctx.quadraticCurveTo(x, bodyTop + drawH, x, bodyTop + drawH - r);
+      ctx.lineTo(x, bodyTop + r);
+      ctx.quadraticCurveTo(x, bodyTop, x + r, bodyTop);
+      ctx.closePath();
       ctx.fill();
 
-      // Top shimmer
-      if (!b.isFuture) {
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(x, y, barW, Math.min(6, barH));
+      // Marqueur central (mid) : trait horizontal sur la bougie
+      if (midCol && bodyH >= 4) {
+        ctx.strokeStyle = midCol;
+        ctx.lineWidth   = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x + 1, yMid);
+        ctx.lineTo(x + barW - 1, yMid);
+        ctx.stroke();
       }
     } else {
       ctx.fillStyle = b.isFuture ? '#161616' : '#1c1c1c';
@@ -972,16 +994,20 @@ function _showTooltip(cx, cy, bar) {
   if (!tt) return;
 
   const label = bar.isToday ? "Aujourd'hui" : bar.isFuture ? 'À venir' : `Jour ${bar.day}`;
-  const val   = bar.isFuture ? '—' : money(bar.earnings);
+  const low   = bar.low  ?? bar.earnings ?? 0;
+  const high  = bar.high ?? bar.earnings ?? 0;
+  const val   = bar.isFuture ? '—' : moneyR(low, high);
   const color = bar.isToday ? '#ffc107' : bar.isFuture ? '#444' : '#00e676';
-  const predLine = bar.isToday && bar.predicted > bar.earnings
-    ? `<div class="tt-label" style="color:rgba(255,193,7,.6)">→ fin de journée ~${money(bar.predicted)}</div>`
+  const predLow  = bar.predLow  ?? 0;
+  const predHigh = bar.predHigh ?? bar.predicted ?? 0;
+  const predLine = bar.isToday && predHigh > high
+    ? `<div class="tt-label" style="color:rgba(255,193,7,.6)">→ fin de journée ~${moneyR(predLow, predHigh)}</div>`
     : '';
 
   tt.innerHTML = `
     <div class="tt-day">${label}</div>
     <div class="tt-val" style="color:${color}">${val}</div>
-    <div class="tt-label">${bar.isFuture ? 'Pas encore passé' : 'Gains estimés'}</div>
+    <div class="tt-label">${bar.isFuture ? 'Pas encore passé' : 'Estimation (range)'}</div>
     ${predLine}`;
   tt.style.display = 'block';
 
@@ -989,7 +1015,7 @@ function _showTooltip(cx, cy, bar) {
   const pad = 12;
   let left = cx + 14;
   let top  = cy - 70;
-  const ttW = 120, ttH = 70;
+  const ttW = 160, ttH = 70;
   if (left + ttW > window.innerWidth - pad)  left = cx - ttW - 14;
   if (top < pad)                              top  = cy + 14;
   if (top + ttH > window.innerHeight - pad)  top  = window.innerHeight - ttH - pad;
@@ -1039,6 +1065,10 @@ function renderMonthly() {
       dataMap[d.day] = d.minutes;
   });
 
+  const mLow  = withTransactions ? MULT_LOW  : 1;
+  const mHigh = withTransactions ? MULT_HIGH : 1;
+  const mMid  = withTransactions ? MULT_MID  : 1;
+
   // Build full bar array — ALL days of month
   const bars = [];
   for (let day = 1; day <= daysInMonth; day++) {
@@ -1048,35 +1078,46 @@ function renderMonthly() {
     const minutes  = isToday && _todayActualMinutes !== null
       ? _todayActualMinutes
       : (dataMap[day] ?? 0);
-    const earnings = isFuture ? 0 : (minutes / 1000 * (withTransactions ? MULTIPLIER : 1));
+    const base = minutes / 1000;
     bars.push({
       day,
-      earnings,
+      low:  isFuture ? 0 : base * mLow,
+      mid:  isFuture ? 0 : base * mMid,
+      high: isFuture ? 0 : base * mHigh,
       isPast:   !isFuture && !isToday,
       isToday,
       isFuture,
     });
   }
 
-  // Totals (only past + today)
-  const monthTotal     = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.earnings, 0);
+  // Totals (only past + today) — range
+  const monthTotalLow  = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.low,  0);
+  const monthTotalHigh = bars.filter(b => !b.isFuture).reduce((s, b) => s + b.high, 0);
   const daysPassed     = isCurrentMonth ? today : daysInMonth;
 
   // Projection: extrapolate today's partial data to avoid bias at 3am
-  let projection;
+  let projLow, projHigh;
   if (isCurrentMonth) {
-    const pastEarnings      = bars.filter(b => b.isPast).reduce((s, b) => s + b.earnings, 0);
-    const todayBar          = bars.find(b => b.isToday);
-    const hoursElapsed      = now.hour + now.minute / 60;
-    const todayExtrapolated = todayBar && hoursElapsed > 0
-      ? todayBar.earnings * (24 / hoursElapsed)
-      : (todayBar?.earnings ?? 0);
-    if (todayBar) todayBar.predicted = todayExtrapolated;
-    const pastDays          = bars.filter(b => b.isPast).length;
-    const avgPerDay         = (pastEarnings + todayExtrapolated) / (pastDays + 1);
-    projection              = avgPerDay * daysInMonth;
+    const pastEarnLow  = bars.filter(b => b.isPast).reduce((s, b) => s + b.low,  0);
+    const pastEarnHigh = bars.filter(b => b.isPast).reduce((s, b) => s + b.high, 0);
+    const todayBar     = bars.find(b => b.isToday);
+    const hoursElapsed = now.hour + now.minute / 60;
+    const factor       = hoursElapsed > 0 ? (24 / hoursElapsed) : 1;
+    const todayExtraLow  = todayBar ? todayBar.low  * factor : 0;
+    const todayExtraHigh = todayBar ? todayBar.high * factor : 0;
+    if (todayBar) {
+      todayBar.predLow  = todayExtraLow;
+      todayBar.predMid  = todayBar.mid * factor;
+      todayBar.predHigh = todayExtraHigh;
+    }
+    const pastDays = bars.filter(b => b.isPast).length;
+    const avgLow   = (pastEarnLow  + todayExtraLow)  / (pastDays + 1);
+    const avgHigh  = (pastEarnHigh + todayExtraHigh) / (pastDays + 1);
+    projLow  = avgLow  * daysInMonth;
+    projHigh = avgHigh * daysInMonth;
   } else {
-    projection = daysPassed > 0 ? (monthTotal / daysPassed) * daysInMonth : 0;
+    projLow  = daysPassed > 0 ? (monthTotalLow  / daysPassed) * daysInMonth : 0;
+    projHigh = daysPassed > 0 ? (monthTotalHigh / daysPassed) * daysInMonth : 0;
   }
 
   // Month pills
@@ -1107,11 +1148,11 @@ function renderMonthly() {
       <div class="monthly-summary">
         <div class="msumm">
           <div class="ml">${isCurrentMonth ? 'Ce mois-ci' : 'Total du mois'}</div>
-          <div class="mv c-gold">${money(monthTotal)}</div>
+          <div class="mv c-gold ${withTransactions ? 'range' : ''}">${moneyR(monthTotalLow, monthTotalHigh)}</div>
         </div>
         <div class="msumm">
           <div class="ml">Projection / mois</div>
-          <div class="mv c-purple">${money(projection)}</div>
+          <div class="mv c-purple ${withTransactions ? 'range' : ''}">${moneyR(projLow, projHigh)}</div>
         </div>
       </div>
     </div>
@@ -1144,7 +1185,9 @@ function changeMonth(dir) {
 // ── RENDER MAIN ───────────────────────────────────────
 function render(island, graph, parsed) {
   _lastIsland = island; _lastGraph = graph; _lastParsed = parsed;
-  const mult         = withTransactions ? MULTIPLIER : 1;
+  const mLow  = withTransactions ? MULT_LOW  : 1;
+  const mHigh = withTransactions ? MULT_HIGH : 1;
+  const rangeCls = withTransactions ? 'range' : '';
   const now          = parisNow();
   const values       = graph.data.values     ?? [];
   const valuesAvg    = graph.data.values_avg ?? values;
@@ -1153,12 +1196,15 @@ function render(island, graph, parsed) {
 
   const todayMinutes      = valuesAvg.reduce((s, v) => s + v, 0) * 10; // full 24h for the card
   _todayActualMinutes     = computeTodayMinutes(graph);                 // midnight→now for the chart
-  const todayEarnings     = todayMinutes * RATE * mult;
+  const todayEarnLow      = todayMinutes * RATE * mLow;
+  const todayEarnHigh     = todayMinutes * RATE * mHigh;
 
   const totalMinutes  = parsed.totalMinutes ?? 0;
-  const totalEarnings = totalMinutes * RATE * mult;
+  const totalEarnLow  = totalMinutes * RATE * mLow;
+  const totalEarnHigh = totalMinutes * RATE * mHigh;
 
-  const perHour = currentPlayers * 60 * RATE * mult;
+  const perHourLow  = currentPlayers * 60 * RATE * mLow;
+  const perHourHigh = currentPlayers * 60 * RATE * mHigh;
 
   const allTimePeak = parsed.allTimePeak ?? '—';
   const favorites   = parsed.favorites   ?? '—';
@@ -1199,12 +1245,12 @@ function render(island, graph, parsed) {
     <div class="row2">
       <div class="card">
         <div class="card-label">Gains / heure</div>
-        <div class="card-value c-gold">${money(perHour)}</div>
+        <div class="card-value c-gold ${rangeCls}">${moneyR(perHourLow, perHourHigh)}</div>
         <div class="card-sub">Au rythme actuel · <strong>${fmt(currentPlayers)}</strong> joueurs</div>
       </div>
       <div class="card">
         <div class="card-label">Dernières 24h</div>
-        <div class="card-value c-gold">${money(todayEarnings)}</div>
+        <div class="card-value c-gold ${rangeCls}">${moneyR(todayEarnLow, todayEarnHigh)}</div>
         <div class="card-sub"><strong>${fmt(Math.round(todayMinutes))}</strong> min jouées</div>
       </div>
     </div>
@@ -1213,7 +1259,7 @@ function render(island, graph, parsed) {
     <div class="estimates-section">
       <div class="estimates-header">
         <span class="estimates-title">Estimations</span>
-        <span class="estimates-badge">approximatif</span>
+        <span class="estimates-badge">range ×${MULT_LOW}–${MULT_HIGH}</span>
       </div>
 
       <div>
@@ -1221,15 +1267,15 @@ function render(island, graph, parsed) {
         <div class="proj-row">
           <div class="proj-card">
             <div class="proj-label">/ jour</div>
-            <div class="proj-value">${money(perHour * 24)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24, perHourHigh * 24)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ mois</div>
-            <div class="proj-value">${money(perHour * 24 * 30)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24 * 30, perHourHigh * 24 * 30)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ an</div>
-            <div class="proj-value">${money(perHour * 24 * 365)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(perHourLow * 24 * 365, perHourHigh * 24 * 365)}</div>
           </div>
         </div>
       </div>
@@ -1241,15 +1287,15 @@ function render(island, graph, parsed) {
         <div class="proj-row">
           <div class="proj-card">
             <div class="proj-label">/ jour</div>
-            <div class="proj-value">${money(todayEarnings)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow, todayEarnHigh)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ mois</div>
-            <div class="proj-value">${money(todayEarnings * 30)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow * 30, todayEarnHigh * 30)}</div>
           </div>
           <div class="proj-card">
             <div class="proj-label">/ an</div>
-            <div class="proj-value">${money(todayEarnings * 365)}</div>
+            <div class="proj-value ${rangeCls}">${moneyR(todayEarnLow * 365, todayEarnHigh * 365)}</div>
           </div>
         </div>
       </div>
@@ -1259,8 +1305,8 @@ function render(island, graph, parsed) {
     <div class="card-wide">
       <div class="card-label">Gains totaux estimés</div>
       <div class="total-row">
-        <div class="total-big c-purple">${money(totalEarnings)}</div>
-        <div class="total-tag">${withTransactions ? '×2.7' : '×1'}</div>
+        <div class="total-big c-purple ${rangeCls}">${moneyR(totalEarnLow, totalEarnHigh)}</div>
+        <div class="total-tag">${withTransactions ? `×${MULT_LOW}–${MULT_HIGH}` : '×1'}</div>
       </div>
       <div class="card-sub" style="margin-top:8px">
         Basé sur <strong>${fmt(totalMinutes)}</strong> min jouées · $1 = 1 000 min
@@ -1288,15 +1334,17 @@ function updateSim(defaultPlayers) {
   const input = document.getElementById('sim-players');
   if (!input) return;
   if (defaultPlayers !== undefined && !_simEdited) input.value = defaultPlayers;
-  const players = Math.max(0, parseInt(input.value) || 0);
-  const mult    = withTransactions ? MULTIPLIER : 1;
-  const perHour = players * 60 * RATE * mult;
+  const players  = Math.max(0, parseInt(input.value) || 0);
+  const mLow     = withTransactions ? MULT_LOW  : 1;
+  const mHigh    = withTransactions ? MULT_HIGH : 1;
+  const perHrLo  = players * 60 * RATE * mLow;
+  const perHrHi  = players * 60 * RATE * mHigh;
   const el = document.getElementById('sim-earn-results');
   if (el) el.innerHTML = `
-    <div class="sim-r"><div class="sim-rl">/ heure</div><div class="sim-rv">${money(perHour)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ jour</div><div class="sim-rv">${money(perHour * 24)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ mois</div><div class="sim-rv">${money(perHour * 24 * 30)}</div></div>
-    <div class="sim-r"><div class="sim-rl">/ an</div><div class="sim-rv">${money(perHour * 24 * 365)}</div></div>`;
+    <div class="sim-r"><div class="sim-rl">/ heure</div><div class="sim-rv">${moneyR(perHrLo, perHrHi)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ jour</div><div class="sim-rv">${moneyR(perHrLo * 24, perHrHi * 24)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ mois</div><div class="sim-rv">${moneyR(perHrLo * 24 * 30, perHrHi * 24 * 30)}</div></div>
+    <div class="sim-r"><div class="sim-rl">/ an</div><div class="sim-rv">${moneyR(perHrLo * 24 * 365, perHrHi * 24 * 365)}</div></div>`;
   updateCampaign();
 }
 
@@ -1304,25 +1352,30 @@ function updateCampaign() {
   const budget = Math.max(0, parseFloat(document.getElementById('sim-budget')?.value) || 0);
   const boost  = Math.max(0, parseInt(document.getElementById('sim-boost')?.value)  || 0);
   const days   = Math.max(1, parseInt(document.getElementById('sim-days')?.value)   || 1);
-  const mult   = withTransactions ? MULTIPLIER : 1;
-  const extraEarn  = boost * days * 1440 * RATE * mult;
-  const profit     = extraEarn - budget;
-  const breakEven  = budget > 0 ? Math.ceil(budget / (days * 1440 * RATE * mult)) : 0;
-  const isWin      = profit >= 0;
+  const mLow   = withTransactions ? MULT_LOW  : 1;
+  const mHigh  = withTransactions ? MULT_HIGH : 1;
+  const extraLow   = boost * days * 1440 * RATE * mLow;
+  const extraHigh  = boost * days * 1440 * RATE * mHigh;
+  const profitLow  = extraLow  - budget;
+  const profitHigh = extraHigh - budget;
+  // Break-even : optimiste (mHigh) → pessimiste (mLow)
+  const beLow  = budget > 0 ? Math.ceil(budget / (days * 1440 * RATE * mHigh)) : 0;
+  const beHigh = budget > 0 ? Math.ceil(budget / (days * 1440 * RATE * mLow))  : 0;
+  const isWin  = profitHigh >= 0;
   const el = document.getElementById('sim-campaign-result');
   if (!el) return;
   el.innerHTML = `
     <div class="sim-roi-row">
       <div>
         <div class="sim-rl">Gains campagne</div>
-        <div class="sim-rv" style="color:var(--blue);font-size:20px">${money(extraEarn)}</div>
+        <div class="sim-rv" style="color:var(--blue);font-size:16px">${moneyR(extraLow, extraHigh)}</div>
       </div>
       <div style="text-align:right">
-        <div class="sim-rl">${isWin ? 'Profit net' : 'Perte nette'}</div>
-        <div class="sim-rv" style="color:${isWin ? 'var(--green)' : '#ef5350'};font-size:20px">${isWin ? '+' : ''}${money(profit)}</div>
+        <div class="sim-rl">${profitLow >= 0 ? 'Profit net' : (profitHigh >= 0 ? 'Profit / perte' : 'Perte nette')}</div>
+        <div class="sim-rv" style="color:${isWin ? 'var(--green)' : '#ef5350'};font-size:16px">${moneyR(profitLow, profitHigh)}</div>
       </div>
     </div>
-    ${budget > 0 ? `<div class="sim-breakeven">Break-even : <strong>${breakEven} joueurs</strong> en moyenne sur ${days}j</div>` : ''}`;
+    ${budget > 0 ? `<div class="sim-breakeven">Break-even : <strong>${beLow}–${beHigh} joueurs</strong> en moyenne sur ${days}j</div>` : ''}`;
 }
 
 // ── CACHE ─────────────────────────────────────────────
