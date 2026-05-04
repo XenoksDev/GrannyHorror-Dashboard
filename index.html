@@ -816,7 +816,11 @@ function _drawBars(highlightIdx) {
 
   ctx.clearRect(0, 0, W, H);
 
-  const maxE    = Math.max(...bars.map(b => Math.max(b.high ?? b.earnings ?? 0, b.predHigh ?? b.predicted ?? 0)), 0.01);
+  // En mode moyenne on scale sur le mid, en mode range on scale sur le high
+  const maxE    = Math.max(...bars.map(b => {
+    if (showRange) return Math.max(b.high ?? b.earnings ?? 0, b.predHigh ?? b.predicted ?? 0);
+    return Math.max(b.mid ?? b.earnings ?? 0, b.predMid ?? b.predicted ?? 0);
+  }), 0.01);
   const scale   = _niceScale(maxE);
   const gridMax = Math.ceil(maxE / scale) * scale;
 
@@ -852,41 +856,10 @@ function _drawBars(highlightIdx) {
     const low  = b.low  ?? b.earnings ?? 0;
     const mid  = b.mid  ?? b.earnings ?? 0;
     const high = b.high ?? b.earnings ?? 0;
-    const yLow  = chartH - (low  / gridMax) * (chartH - 8);
-    const yMid  = chartH - (mid  / gridMax) * (chartH - 8);
-    const yHigh = chartH - (high / gridMax) * (chartH - 8);
-    const bodyTop = yHigh;
-    const bodyH   = Math.max(0, yLow - yHigh);
-    const r       = Math.min(3, barW / 2);
-    const isHL    = i === highlightIdx;
+    const r    = Math.min(showRange ? 3 : 4, barW / 2);
+    const isHL = i === highlightIdx;
 
     _barRects.push({ x, w: barW, bar: b, idx: i });
-
-    // Ghost prediction range (today only) : extension translucide jusqu'au range projeté
-    const predLow  = b.predLow  ?? 0;
-    const predHigh = b.predHigh ?? b.predicted ?? 0;
-    if (b.isToday && predHigh > high) {
-      const yPredLow  = chartH - (Math.max(predLow, low) / gridMax) * (chartH - 8);
-      const yPredHigh = chartH - (predHigh / gridMax) * (chartH - 8);
-      const ghostH    = Math.max(2, yPredLow - yPredHigh);
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle   = '#ffc107';
-      ctx.fillRect(x, yPredHigh, barW, ghostH);
-      ctx.restore();
-      // Trait pointillé sur le haut prédit
-      ctx.save();
-      ctx.globalAlpha = 0.5;
-      ctx.strokeStyle = '#ffc107';
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(x, yPredHigh);
-      ctx.lineTo(x + barW, yPredHigh);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
 
     // Couleurs
     let topCol, botCol, midCol, glow;
@@ -895,55 +868,160 @@ function _drawBars(highlightIdx) {
     else if (high > 0)         { topCol = isHL ? '#69f0ae' : '#00e676'; botCol = isHL ? '#00c853' : '#00897b'; midCol = '#b9f6ca'; glow = 'rgba(0,230,118,.2)'; }
     else                       { topCol = '#1c1c1c'; botCol = '#1a1a1a'; midCol = null; glow = null; }
 
-    // Glow on hover
-    if (isHL && glow) {
-      ctx.fillStyle = glow;
-      ctx.fillRect(x - 3, 0, barW + 6, chartH);
-    }
+    // Ghost prediction (today uniquement)
+    const predLow  = b.predLow  ?? 0;
+    const predMid  = b.predMid  ?? b.predicted ?? 0;
+    const predHigh = b.predHigh ?? b.predicted ?? 0;
 
-    if (high > 0) {
-      // Wick : trait fin de zéro jusqu'au haut de la bougie
-      const wickX = x + barW / 2;
-      ctx.strokeStyle = botCol;
-      ctx.globalAlpha = 0.45;
-      ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(wickX, chartH);
-      ctx.lineTo(wickX, yHigh);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+    if (showRange) {
+      // ── MODE RANGE : bougies ─────────────────────────
+      const yLow    = chartH - (low  / gridMax) * (chartH - 8);
+      const yMid    = chartH - (mid  / gridMax) * (chartH - 8);
+      const yHigh   = chartH - (high / gridMax) * (chartH - 8);
+      const bodyTop = yHigh;
+      const bodyH   = Math.max(0, yLow - yHigh);
 
-      // Body : rectangle entre low et high (la bougie)
-      const grad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
-      grad.addColorStop(0, topCol);
-      grad.addColorStop(1, botCol);
-      ctx.fillStyle = grad;
-      const drawH = Math.max(2, bodyH);
-      ctx.beginPath();
-      ctx.moveTo(x + r, bodyTop);
-      ctx.lineTo(x + barW - r, bodyTop);
-      ctx.quadraticCurveTo(x + barW, bodyTop, x + barW, bodyTop + r);
-      ctx.lineTo(x + barW, bodyTop + drawH - r);
-      ctx.quadraticCurveTo(x + barW, bodyTop + drawH, x + barW - r, bodyTop + drawH);
-      ctx.lineTo(x + r, bodyTop + drawH);
-      ctx.quadraticCurveTo(x, bodyTop + drawH, x, bodyTop + drawH - r);
-      ctx.lineTo(x, bodyTop + r);
-      ctx.quadraticCurveTo(x, bodyTop, x + r, bodyTop);
-      ctx.closePath();
-      ctx.fill();
-
-      // Marqueur central (mid) : trait horizontal sur la bougie
-      if (midCol && bodyH >= 4) {
-        ctx.strokeStyle = midCol;
-        ctx.lineWidth   = 1.2;
+      // Ghost (prédiction du range pour aujourd'hui)
+      if (b.isToday && predHigh > high) {
+        const yPredLow  = chartH - (Math.max(predLow, low) / gridMax) * (chartH - 8);
+        const yPredHigh = chartH - (predHigh / gridMax) * (chartH - 8);
+        const ghostH    = Math.max(2, yPredLow - yPredHigh);
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle   = '#ffc107';
+        ctx.fillRect(x, yPredHigh, barW, ghostH);
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = '#ffc107';
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        ctx.moveTo(x + 1, yMid);
-        ctx.lineTo(x + barW - 1, yMid);
+        ctx.moveTo(x, yPredHigh);
+        ctx.lineTo(x + barW, yPredHigh);
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Glow on hover
+      if (isHL && glow) {
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 3, 0, barW + 6, chartH);
+      }
+
+      if (high > 0) {
+        // Wick (mèche)
+        const wickX = x + barW / 2;
+        ctx.strokeStyle = botCol;
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        ctx.moveTo(wickX, chartH);
+        ctx.lineTo(wickX, yHigh);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Body de la bougie (low → high)
+        const grad = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+        grad.addColorStop(0, topCol);
+        grad.addColorStop(1, botCol);
+        ctx.fillStyle = grad;
+        const drawH = Math.max(2, bodyH);
+        ctx.beginPath();
+        ctx.moveTo(x + r, bodyTop);
+        ctx.lineTo(x + barW - r, bodyTop);
+        ctx.quadraticCurveTo(x + barW, bodyTop, x + barW, bodyTop + r);
+        ctx.lineTo(x + barW, bodyTop + drawH - r);
+        ctx.quadraticCurveTo(x + barW, bodyTop + drawH, x + barW - r, bodyTop + drawH);
+        ctx.lineTo(x + r, bodyTop + drawH);
+        ctx.quadraticCurveTo(x, bodyTop + drawH, x, bodyTop + drawH - r);
+        ctx.lineTo(x, bodyTop + r);
+        ctx.quadraticCurveTo(x, bodyTop, x + r, bodyTop);
+        ctx.closePath();
+        ctx.fill();
+
+        // Marqueur central (mid)
+        if (midCol && bodyH >= 4) {
+          ctx.strokeStyle = midCol;
+          ctx.lineWidth   = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(x + 1, yMid);
+          ctx.lineTo(x + barW - 1, yMid);
+          ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = b.isFuture ? '#161616' : '#1c1c1c';
+        ctx.fillRect(x, chartH - 2, barW, 2);
       }
     } else {
-      ctx.fillStyle = b.isFuture ? '#161616' : '#1c1c1c';
-      ctx.fillRect(x, chartH - 2, barW, 2);
+      // ── MODE MOYENNE : barres simples ────────────────
+      const barH = mid > 0 ? Math.max(3, (mid / gridMax) * (chartH - 8)) : 0;
+      const y    = chartH - barH;
+
+      // Ghost prediction (mid extrapolé) pour aujourd'hui
+      if (b.isToday && predMid > mid) {
+        const ghostH = Math.max(3, (predMid / gridMax) * (chartH - 8));
+        const ghostY = chartH - ghostH;
+        const rg     = Math.min(4, barW / 2);
+        ctx.save();
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle   = '#ffc107';
+        ctx.beginPath();
+        ctx.moveTo(x + rg, ghostY);
+        ctx.lineTo(x + barW - rg, ghostY);
+        ctx.quadraticCurveTo(x + barW, ghostY, x + barW, ghostY + rg);
+        ctx.lineTo(x + barW, chartH);
+        ctx.lineTo(x, chartH);
+        ctx.lineTo(x, ghostY + rg);
+        ctx.quadraticCurveTo(x, ghostY, x + rg, ghostY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = '#ffc107';
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, ghostY);
+        ctx.lineTo(x + barW, ghostY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Glow on hover
+      if (isHL && glow) {
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - 3, 0, barW + 6, chartH);
+      }
+
+      if (barH > 0) {
+        const grad = ctx.createLinearGradient(0, y, 0, chartH);
+        grad.addColorStop(0, topCol);
+        grad.addColorStop(1, botCol);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + barW - r, y);
+        ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+        ctx.lineTo(x + barW, chartH);
+        ctx.lineTo(x, chartH);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Top shimmer
+        if (!b.isFuture) {
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(x, y, barW, Math.min(6, barH));
+        }
+      } else {
+        ctx.fillStyle = b.isFuture ? '#161616' : '#1c1c1c';
+        ctx.fillRect(x, chartH - 2, barW, 2);
+      }
     }
 
     // Day labels
