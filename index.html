@@ -325,6 +325,82 @@
       transition: width .35s ease, opacity .4s ease;
     }
 
+    /* ── CONTEXT / MARKET CARD ─────────────── */
+    .context-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .context-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .context-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .context-fn {
+      font-size: 11px;
+      color: var(--dim);
+    }
+    .context-fn strong {
+      color: var(--text);
+      font-weight: 700;
+    }
+    .ctx-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ctx-map {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ctx-name {
+      font-size: 11px;
+      font-weight: 700;
+      width: 52px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ctx-bar-wrap {
+      flex: 1;
+      height: 6px;
+      background: #1e1e1e;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .ctx-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .6s ease;
+    }
+    .ctx-val {
+      font-size: 12px;
+      font-weight: 700;
+      width: 36px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .ctx-pct {
+      font-size: 10px;
+      color: var(--dim);
+      width: 40px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
     /* ── ESTIMATIONS SECTION ───────────────── */
     .estimates-section {
       background: var(--card);
@@ -475,6 +551,7 @@
     <div class="loading"><div class="spinner"></div>Chargement…</div>
   </div>
 
+  <div id="context-section"></div>
   <div id="monthly-section"></div>
 
   <!-- SIMULATEUR (statique — persiste entre les refreshs) -->
@@ -528,9 +605,12 @@
 // ── CONFIG ────────────────────────────────────────────
 const ISLAND_ID    = 519527;
 const ISLAND_URL   = 'https://fortnite.gg/island/4482-9358-0065';
+const RIVAL_ID     = 106598;
 const API_ISLAND   = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
 const API_STATS    = `https://fortnite.gg/island?id=${ISLAND_ID}`;          // actual values, no ranks
 const API_GRAPH    = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
+const API_RIVAL    = `https://fortnite.gg/player-count-graph?range=1d&id=${RIVAL_ID}`;
+const API_FN_COUNT = 'https://fortnite.gg/player-count';
 const API_YEAR     = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
 const PROXY_OWN    = '/.netlify/functions/proxy?url=';  // our own — fast, server-side
 const PROXY        = 'https://api.allorigins.win/get?url=';
@@ -554,6 +634,8 @@ let withTransactions  = true;
 let showRange         = false;  // false = affiche la moyenne · true = affiche le range low–high
 let _lastIsland = null, _lastGraph = null, _lastParsed = null;
 let _todayActualMinutes = null; // today's player-minutes from the 1d graph, midnight-to-now
+let _rivalPlayers = null;       // live rival map player count
+let _fnPlayers    = null;       // total fortnite players right now
 // Paris date for initial state
 const _p = new Intl.DateTimeFormat('en-US', { timeZone:'Europe/Paris', year:'numeric', month:'numeric' }).formatToParts(new Date());
 let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
@@ -641,6 +723,12 @@ function parseK(str) {
   if (str.endsWith('M')) return Math.round(n * 1_000_000);
   if (str.endsWith('K')) return Math.round(n * 1_000);
   return Math.round(n);
+}
+
+function parseFNPlayers(html) {
+  if (!html) return null;
+  const m = html.match(/data-n=['"](\d+)['"]/);
+  return m ? parseInt(m[1]) : null;
 }
 
 function parseHTML(html) {
@@ -1144,6 +1232,74 @@ function checkMilestones(players) {
   if (players < last * 0.6) localStorage.setItem('lastMilestone', crossed[crossed.length - 1]);
 }
 
+// ── RENDER CONTEXT / MARKET SECTION ──────────────────
+function renderContext() {
+  const el = document.getElementById('context-section');
+  if (!el) return;
+
+  // Need at least current players to render anything
+  const granny = _lastGraph ? (_lastGraph.data.values ?? []) : [];
+  const ourPlayers = granny.length ? granny[granny.length - 1] : null;
+  if (ourPlayers === null && _rivalPlayers === null && _fnPlayers === null) return;
+
+  const fn     = _fnPlayers ?? 0;
+  const our    = ourPlayers ?? 0;
+  const rival  = _rivalPlayers ?? null;
+
+  // Market share bars (% of total FN players)
+  const maxPlayers = Math.max(our, rival ?? 0, 1);
+  // Use FN total for % if available, else relative bar vs each other
+  const barBase = fn > 0 ? fn : maxPlayers;
+
+  const ourPct   = fn > 0 ? ((our   / fn) * 100).toFixed(3) + '%' : '—';
+  const rivPct   = fn > 0 && rival !== null ? ((rival / fn) * 100).toFixed(3) + '%' : '—';
+
+  const ourBarW  = ((our / barBase) * 100).toFixed(1) + '%';
+  const rivBarW  = rival !== null ? ((rival / barBase) * 100).toFixed(1) + '%' : '0%';
+
+  const delta = rival !== null ? our - rival : null;
+  const deltaStr = delta !== null
+    ? (delta >= 0
+        ? `<span style="color:var(--green);font-size:10px">+${fmt(delta)} vs rival</span>`
+        : `<span style="color:#ef5350;font-size:10px">${fmt(delta)} vs rival</span>`)
+    : '';
+
+  el.innerHTML = `
+    <div class="context-card">
+      <div class="context-header">
+        <span class="context-title">📊 Contexte marché</span>
+        ${fn ? `<span class="context-fn">🎮 <strong>${fmt(fn)}</strong> sur Fortnite</span>` : ''}
+      </div>
+      <div class="ctx-row">
+        <div class="ctx-map">
+          <span class="ctx-name c-green">Granny</span>
+          <div class="ctx-bar-wrap">
+            <div class="ctx-bar-fill" style="width:${ourBarW};background:var(--green)"></div>
+          </div>
+          <span class="ctx-val c-green">${fmt(our)}</span>
+          <span class="ctx-pct">${ourPct}</span>
+        </div>
+        ${rival !== null ? `
+        <div class="ctx-map">
+          <span class="ctx-name" style="color:#ef5350">Rival</span>
+          <div class="ctx-bar-wrap">
+            <div class="ctx-bar-fill" style="width:${rivBarW};background:#ef5350"></div>
+          </div>
+          <span class="ctx-val" style="color:#ef5350">${fmt(rival)}</span>
+          <span class="ctx-pct">${rivPct}</span>
+        </div>` : `
+        <div class="ctx-map" style="opacity:.4">
+          <span class="ctx-name" style="color:#ef5350">Rival</span>
+          <div class="ctx-bar-wrap"><div class="ctx-bar-fill" style="width:0%"></div></div>
+          <span class="ctx-val">…</span>
+          <span class="ctx-pct"></span>
+        </div>`}
+      </div>
+      ${deltaStr ? `<div style="text-align:center">${deltaStr}</div>` : ''}
+    </div>
+  `;
+}
+
 // ── RENDER MONTHLY SECTION ────────────────────────────
 function renderMonthly() {
   const now   = parisNow();
@@ -1417,6 +1573,7 @@ function render(island, graph, parsed) {
   if (simEl) simEl.style.display = '';
   updateSim(currentPlayers);
 
+  renderContext();
   renderMonthly();
 }
 
@@ -1569,6 +1726,17 @@ async function load() {
     yearlyDays = aggregateByDay(yearData);
     saveCache(null, graphRes.value, parsed, yearlyDays);
     renderMonthly();
+  }).catch(() => {});
+
+  // Phase 2b — rival + total FN players (independent, non-blocking)
+  getJSON(API_RIVAL).then(data => {
+    const vals = data.data.values ?? [];
+    _rivalPlayers = vals.length ? vals[vals.length - 1] : 0;
+    renderContext();
+  }).catch(() => {});
+  getText(API_FN_COUNT).then(html => {
+    const n = parseFNPlayers(html);
+    if (n) { _fnPlayers = n; renderContext(); }
   }).catch(() => {});
 }
 
