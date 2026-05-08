@@ -669,6 +669,13 @@ function fetchT(url, ms) {
 }
 
 async function getJSON(url) {
+  // 0. Direct browser fetch (résidentiel, pas bloqué par fortnite.gg côté IP)
+  //    Si CORS le permet on coupe court à toute la chaîne de proxies.
+  try {
+    const r = await fetchT(url, 6000);
+    if (r.ok) return r.json();
+  } catch (_) {}
+
   // 1. Own Netlify proxy — server-side, no CORS, fast
   try {
     const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
@@ -692,6 +699,12 @@ async function getJSON(url) {
 }
 
 async function getText(url) {
+  // 0. Direct browser fetch
+  try {
+    const r = await fetchT(url, 6000);
+    if (r.ok) return r.text();
+  } catch (_) {}
+
   // 1. Own Netlify proxy — returns body directly
   try {
     const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
