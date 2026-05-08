@@ -668,33 +668,45 @@ function fetchT(url, ms) {
   return fetch(url, { signal: ctrl.signal, cache: 'no-store' }).finally(() => clearTimeout(tid));
 }
 
+// Diagnostic — tracks which fetch path succeeded/failed last
+let _lastDiag = null;
+function _diagReset() { _lastDiag = { direct: '?', netlify: '?', allorigins: '?', corsproxy: '?', winner: null }; }
+
 async function getJSON(url) {
+  _diagReset();
+
   // 0. Direct browser fetch (résidentiel, pas bloqué par fortnite.gg côté IP)
-  //    Si CORS le permet on coupe court à toute la chaîne de proxies.
   try {
     const r = await fetchT(url, 6000);
-    if (r.ok) return r.json();
-  } catch (_) {}
+    if (r.ok) { _lastDiag.direct = 'OK'; _lastDiag.winner = 'direct'; return r.json(); }
+    _lastDiag.direct = 'HTTP ' + r.status;
+  } catch (e) { _lastDiag.direct = 'ERR ' + (e.name || e.message || 'unknown'); }
 
   // 1. Own Netlify proxy — server-side, no CORS, fast
   try {
     const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
-    if (r.ok) return r.json();
-  } catch (_) {}
+    if (r.ok) { _lastDiag.netlify = 'OK'; _lastDiag.winner = 'netlify'; return r.json(); }
+    _lastDiag.netlify = 'HTTP ' + r.status;
+  } catch (e) { _lastDiag.netlify = 'ERR ' + (e.name || e.message || 'unknown'); }
 
   // 2. Race external proxies as fallback
   return new Promise((resolve, reject) => {
     let failures = 0;
-    const onFail = () => { if (++failures === 2) reject(new Error('fetch failed: ' + url)); };
+    const onFail = (which, why) => {
+      _lastDiag[which] = why || 'fail';
+      if (++failures === 2) reject(new Error('all proxies failed'));
+    };
 
     fetchT(PROXY + encodeURIComponent(url), 15000)
-      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
       .then(w => JSON.parse(w.contents))
-      .then(resolve).catch(onFail);
+      .then(d => { _lastDiag.allorigins = 'OK'; _lastDiag.winner = _lastDiag.winner ?? 'allorigins'; resolve(d); })
+      .catch(e => onFail('allorigins', typeof e === 'string' ? e : 'ERR'));
 
     fetchT(PROXY2 + encodeURIComponent(url), 15000)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(resolve).catch(onFail);
+      .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+      .then(d => { _lastDiag.corsproxy = 'OK'; _lastDiag.winner = _lastDiag.winner ?? 'corsproxy'; resolve(d); })
+      .catch(e => onFail('corsproxy', typeof e === 'string' ? e : 'ERR'));
   });
 }
 
@@ -1707,18 +1719,31 @@ async function load() {
     if (_loadAttempt < 3) { setTimeout(load, 4000); return; }
     hideLoader();
     _loadAttempt = 0;
-    if (!document.querySelector('.hero')) {
-      document.getElementById('page').innerHTML = `
-        <div class="error-box">
-          Erreur de chargement<br>
-          <small>Les serveurs sont lents ou hors ligne.</small><br><br>
-          <button onclick="_loadAttempt=0;load()"
-            style="margin-top:8px;padding:8px 20px;border:none;border-radius:8px;
-                   background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
-            Réessayer
-          </button>
-        </div>`;
-    }
+
+    // Si on a déjà un rendu cached (.hero existe) : on garde l'affichage,
+    // on ajoute juste un bandeau "données obsolètes" — pas d'écran rouge.
+    if (document.querySelector('.hero')) return;
+
+    const d = _lastDiag || {};
+    const diag = `
+      <div style="text-align:left;font-size:11px;line-height:1.6;color:#888;background:#0a0a0a;border-radius:8px;padding:10px;margin-top:12px;font-family:ui-monospace,monospace">
+        <div>direct browser : <span style="color:${d.direct === 'OK' ? '#00e676' : '#ef5350'}">${d.direct ?? '?'}</span></div>
+        <div>netlify proxy : <span style="color:${d.netlify === 'OK' ? '#00e676' : '#ef5350'}">${d.netlify ?? '?'}</span></div>
+        <div>allorigins    : <span style="color:${d.allorigins === 'OK' ? '#00e676' : '#ef5350'}">${d.allorigins ?? '?'}</span></div>
+        <div>corsproxy     : <span style="color:${d.corsproxy === 'OK' ? '#00e676' : '#ef5350'}">${d.corsproxy ?? '?'}</span></div>
+      </div>`;
+
+    document.getElementById('page').innerHTML = `
+      <div class="error-box">
+        Erreur de chargement<br>
+        <small>Aucune route ne répond pour fortnite.gg.</small>
+        ${diag}
+        <button onclick="_loadAttempt=0;load()"
+          style="margin-top:12px;padding:8px 20px;border:none;border-radius:8px;
+                 background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
+          Réessayer
+        </button>
+      </div>`;
     return;
   }
   _loadAttempt = 0;
