@@ -41,16 +41,21 @@ exports.handler = async (event) => {
 
     const body = await res.text();
     const ct   = (res.headers.get('content-type') || 'text/plain').split(';')[0];
+    const upstreamStatus = res.status;
 
-    _cache.set(url, { body, ct, ts: Date.now() });
+    // Cache uniquement les réponses upstream OK — sinon le client va parse une page d'erreur
+    if (upstreamStatus >= 200 && upstreamStatus < 300) {
+      _cache.set(url, { body, ct, ts: Date.now() });
+    }
 
     return {
-      statusCode: 200,
+      statusCode: upstreamStatus,  // forward réel statut (403 reste 403, etc.)
       headers: {
         'Content-Type': ct,
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': `public, max-age=15, stale-while-revalidate=30`,
+        'Cache-Control': upstreamStatus < 300 ? `public, max-age=15, stale-while-revalidate=30` : 'no-store',
         'X-Cache': 'MISS',
+        'X-Upstream-Status': String(upstreamStatus),
       },
       body,
     };

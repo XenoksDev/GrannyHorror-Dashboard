@@ -678,15 +678,23 @@ async function getJSON(url) {
   // 0. Direct browser fetch (résidentiel, pas bloqué par fortnite.gg côté IP)
   try {
     const r = await fetchT(url, 6000);
-    if (r.ok) { _lastDiag.direct = 'OK'; _lastDiag.winner = 'direct'; return r.json(); }
-    _lastDiag.direct = 'HTTP ' + r.status;
+    if (!r.ok) { _lastDiag.direct = 'HTTP ' + r.status; }
+    else {
+      const data = await r.json();
+      _lastDiag.direct = 'OK'; _lastDiag.winner = 'direct';
+      return data;
+    }
   } catch (e) { _lastDiag.direct = 'ERR ' + (e.name || e.message || 'unknown'); }
 
-  // 1. Own Netlify proxy — server-side, no CORS, fast
+  // 1. Own Netlify proxy — server-side, no CORS
   try {
     const r = await fetchT(PROXY_OWN + encodeURIComponent(url), 6000);
-    if (r.ok) { _lastDiag.netlify = 'OK'; _lastDiag.winner = 'netlify'; return r.json(); }
-    _lastDiag.netlify = 'HTTP ' + r.status;
+    if (!r.ok) { _lastDiag.netlify = 'HTTP ' + r.status; }
+    else {
+      const data = await r.json();
+      _lastDiag.netlify = 'OK'; _lastDiag.winner = 'netlify';
+      return data;
+    }
   } catch (e) { _lastDiag.netlify = 'ERR ' + (e.name || e.message || 'unknown'); }
 
   // 2. Race external proxies as fallback
@@ -698,15 +706,21 @@ async function getJSON(url) {
     };
 
     fetchT(PROXY + encodeURIComponent(url), 15000)
-      .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
-      .then(w => JSON.parse(w.contents))
+      .then(async r => {
+        if (!r.ok) throw 'HTTP ' + r.status;
+        const w = await r.json();           // allorigins wraps response
+        return JSON.parse(w.contents);      // inner contents must be JSON
+      })
       .then(d => { _lastDiag.allorigins = 'OK'; _lastDiag.winner = _lastDiag.winner ?? 'allorigins'; resolve(d); })
-      .catch(e => onFail('allorigins', typeof e === 'string' ? e : 'ERR'));
+      .catch(e => onFail('allorigins', typeof e === 'string' ? e : 'ERR ' + (e.name || 'unknown')));
 
     fetchT(PROXY2 + encodeURIComponent(url), 15000)
-      .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+      .then(async r => {
+        if (!r.ok) throw 'HTTP ' + r.status;
+        return r.json();
+      })
       .then(d => { _lastDiag.corsproxy = 'OK'; _lastDiag.winner = _lastDiag.winner ?? 'corsproxy'; resolve(d); })
-      .catch(e => onFail('corsproxy', typeof e === 'string' ? e : 'ERR'));
+      .catch(e => onFail('corsproxy', typeof e === 'string' ? e : 'ERR ' + (e.name || 'unknown')));
   });
 }
 
