@@ -439,6 +439,116 @@
     .proj-value { font-size: 20px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
     .proj-value.range { font-size: 13px; line-height: 1.15; }
 
+    /* ── MAP SELECTION SCREEN ───────────────── */
+    #map-select {
+      padding: 32px 16px 40px;
+      max-width: 480px;
+      margin: 0 auto;
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+    }
+    body.on-selection #map-select   { display: flex; }
+    body.on-selection header,
+    body.on-selection .clock-bar,
+    body.on-selection .tx-bar,
+    body.on-selection .page         { display: none; }
+    .ms-header {
+      text-align: center;
+      padding: 20px 0 12px;
+    }
+    .ms-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--text);
+    }
+    .ms-subtitle {
+      font-size: 13px;
+      color: var(--dim);
+      margin-top: 6px;
+    }
+    .ms-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .ms-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: transform .15s, border-color .15s, background .15s;
+    }
+    .ms-card:hover, .ms-card:active {
+      border-color: rgba(0,230,118,.35);
+      transform: translateY(-1px);
+      background: #161616;
+    }
+    .ms-thumb {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: #222;
+      flex-shrink: 0;
+    }
+    .ms-thumb.placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #555;
+    }
+    .ms-info { flex: 1; min-width: 0; }
+    .ms-name {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ms-code {
+      font-size: 11px;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+    .ms-mult {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gold);
+      background: rgba(255,193,7,.1);
+      border: 1px solid rgba(255,193,7,.25);
+      border-radius: 6px;
+      padding: 3px 8px;
+      flex-shrink: 0;
+    }
+
+    /* Back-to-maps pill in header */
+    .back-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #181818;
+      border: 1px solid #2a2a2a;
+      border-radius: 20px;
+      padding: 5px 10px 5px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--dim);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-right: 6px;
+    }
+    .back-pill:active { background: #222; color: var(--text); }
+
     /* ── LOADING / ERROR ────────────────────── */
     .loading { padding: 80px 20px; text-align: center; color: var(--dim); font-size: 13px; }
     .spinner {
@@ -513,8 +623,18 @@
 
 <div id="top-loader"></div>
 
+<!-- ÉCRAN DE SÉLECTION DE MAPS -->
+<div id="map-select">
+  <div class="ms-header">
+    <div class="ms-title">Granny Stats</div>
+    <div class="ms-subtitle">Choisis une map à suivre</div>
+  </div>
+  <div class="ms-grid" id="ms-grid"></div>
+</div>
+
 <header>
   <div class="map-info">
+    <div class="back-pill" onclick="backToMaps()" title="Retour à la liste">‹ Maps</div>
     <img class="map-thumb"
          src="https://cdn-0001.qstv.on.epicgames.com/glnukYzSdizuXhteXl/image/landscape_comp.jpeg"
          onerror="this.src='https://fortnite.gg/img/items/52/icon.jpg?1'" alt="">
@@ -583,7 +703,7 @@
     <div class="sim-result-box" id="sim-campaign-result"></div>
   </div>
 
-  <a class="link-btn" href="https://fortnite.gg/island/4482-9358-0065" target="_blank" rel="noopener">
+  <a class="link-btn" id="fortnite-link" href="https://fortnite.gg/island/4482-9358-0065" target="_blank" rel="noopener">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
       <polyline points="15 3 21 3 21 9"/>
@@ -602,30 +722,93 @@
 </div>
 
 <script>
-// ── CONFIG ────────────────────────────────────────────
-const ISLAND_ID    = 519527;
-const ISLAND_URL   = 'https://fortnite.gg/island/4482-9358-0065';
-const RIVAL_ID     = 106598;
-const API_ISLAND   = `https://fortnite.gg/island?id=${ISLAND_ID}&ranks`;
-const API_STATS    = `https://fortnite.gg/island?id=${ISLAND_ID}`;          // actual values, no ranks
-const API_GRAPH    = `https://fortnite.gg/player-count-graph?range=1d&id=${ISLAND_ID}`;
-const API_RIVAL    = `https://fortnite.gg/player-count-graph?range=1d&id=${RIVAL_ID}`;
+// ── MAPS CONFIG ───────────────────────────────────────
+// Pour ajouter une map : juste un objet dans MAPS, le reste suit.
+// id (numérique fortnite.gg) sera auto-découvert au 1er chargement si null.
+const MAPS = [
+  {
+    slug:      '4482-9358-0065',
+    name:      'Survive Granny',
+    short:     'SURVIVE GRANNY',
+    id:        519527,
+    multLow:   2.9,
+    multHigh:  3.5,
+    rivalId:   106598,
+    thumb:     'https://cdn-0001.qstv.on.epicgames.com/glnukYzSdizuXhteXl/image/landscape_comp.jpeg',
+  },
+  {
+    slug:      '7093-4600-4856',
+    name:      'Map 7093',
+    short:     'MAP 7093-4600-4856',
+    id:        null,         // découvert au 1er chargement (parse HTML)
+    multLow:   3.5,
+    multHigh:  3.5,          // single value, pas de range
+    rivalId:   null,
+    thumb:     null,
+  },
+];
+
+// IDs découverts (cache pour ne pas refaire le HTML parsing à chaque fois)
+try {
+  const _saved = JSON.parse(localStorage.getItem('mapIds') || '{}');
+  MAPS.forEach(m => { if (m.id === null && _saved[m.slug]) m.id = _saved[m.slug]; });
+} catch (_) {}
+
+// État de sélection : -1 = écran de sélection, sinon index dans MAPS
+let selectedMapIdx = (() => {
+  const s = localStorage.getItem('selectedMapIdx');
+  return s === null ? -1 : parseInt(s);
+})();
+if (selectedMapIdx < -1 || selectedMapIdx >= MAPS.length) selectedMapIdx = -1;
+
+// ── CONFIG (rempli dynamiquement par applyMapConfig) ──
+let ISLAND_ID, ISLAND_URL, API_ISLAND, API_STATS, API_GRAPH, API_YEAR, RIVAL_ID, API_RIVAL;
 const API_FN_COUNT = 'https://fortnite.gg/player-count';
-const API_YEAR     = `https://fortnite.gg/player-count-graph?range=1y&id=${ISLAND_ID}`;
-const PROXY_OWN    = '/.netlify/functions/proxy?url=';  // our own — fast, server-side
+const PROXY_OWN    = '/.netlify/functions/proxy?url=';
 const PROXY        = 'https://api.allorigins.win/get?url=';
 const PROXY2       = 'https://corsproxy.io/?';
 const REFRESH_MS   = 60_000;
 
 const RATE       = 1 / 1000;   // $1 per 1000 player-minutes
-// Range d'estimation (playtime + transactions) — calibré sur ventes réelles
-const MULT_LOW   = 2.9;        // borne basse
-const MULT_HIGH  = 3.5;        // borne haute
-const MULT_MID   = (MULT_LOW + MULT_HIGH) / 2; // 3.2 — valeur centrale
+let MULT_LOW, MULT_HIGH, MULT_MID;  // remplis par applyMapConfig
 const MILESTONES = [50, 100, 150, 200, 250, 300, 350, 400, 500];
 
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+
+function currentMap() { return MAPS[selectedMapIdx] || MAPS[0]; }
+
+function applyMapConfig() {
+  const m = currentMap();
+  ISLAND_ID  = m.id;
+  ISLAND_URL = `https://fortnite.gg/island/${m.slug}`;
+  API_ISLAND = m.id ? `https://fortnite.gg/island?id=${m.id}&ranks` : null;
+  API_STATS  = m.id ? `https://fortnite.gg/island?id=${m.id}` : null;
+  API_GRAPH  = m.id ? `https://fortnite.gg/player-count-graph?range=1d&id=${m.id}` : null;
+  API_YEAR   = m.id ? `https://fortnite.gg/player-count-graph?range=1y&id=${m.id}` : null;
+  RIVAL_ID   = m.rivalId;
+  API_RIVAL  = m.rivalId ? `https://fortnite.gg/player-count-graph?range=1d&id=${m.rivalId}` : null;
+  MULT_LOW   = m.multLow;
+  MULT_HIGH  = m.multHigh;
+  MULT_MID   = (m.multLow + m.multHigh) / 2;
+  updateHeaderUI();
+}
+
+function updateHeaderUI() {
+  const m = currentMap();
+  const mapName  = document.querySelector('.map-name');
+  const mapCode  = document.querySelector('.map-code');
+  const mapThumb = document.querySelector('.map-thumb');
+  const txOn     = document.getElementById('tx-on-label');
+  const fortLink = document.getElementById('fortnite-link');
+  if (mapName)  mapName.textContent  = m.short;
+  if (mapCode)  mapCode.textContent  = m.slug;
+  if (mapThumb && m.thumb) mapThumb.src = m.thumb;
+  if (txOn)     txOn.textContent     = MULT_LOW === MULT_HIGH
+                                       ? `×${MULT_LOW} transactions`
+                                       : `×${MULT_LOW}–${MULT_HIGH} transactions`;
+  if (fortLink) fortLink.href        = ISLAND_URL;
+}
 
 // ── STATE ─────────────────────────────────────────────
 let yearlyDays        = null;
@@ -1667,22 +1850,24 @@ function updateCampaign() {
     ${budget > 0 ? `<div class="sim-breakeven">Break-even : <strong>${beLow}–${beHigh} joueurs</strong> en moyenne sur ${days}j</div>` : ''}`;
 }
 
-// ── CACHE ─────────────────────────────────────────────
+// ── CACHE (namespaced par slug pour ne pas mélanger les maps) ─
 function saveCache(island, graph, parsed, yearly) {
   try {
-    localStorage.setItem('gh_island', JSON.stringify(island));
-    localStorage.setItem('gh_graph',  JSON.stringify(graph));
-    localStorage.setItem('gh_parsed', JSON.stringify(parsed));
-    localStorage.setItem('gh_yearly', JSON.stringify(yearly));
+    const slug = currentMap().slug;
+    localStorage.setItem('gh_island_' + slug, JSON.stringify(island));
+    localStorage.setItem('gh_graph_'  + slug, JSON.stringify(graph));
+    localStorage.setItem('gh_parsed_' + slug, JSON.stringify(parsed));
+    localStorage.setItem('gh_yearly_' + slug, JSON.stringify(yearly));
   } catch (_) {}
 }
 
 function loadCache() {
   try {
-    const island = JSON.parse(localStorage.getItem('gh_island'));
-    const graph  = JSON.parse(localStorage.getItem('gh_graph'));
-    const parsed = JSON.parse(localStorage.getItem('gh_parsed'));
-    const yearly = JSON.parse(localStorage.getItem('gh_yearly'));
+    const slug = currentMap().slug;
+    const island = JSON.parse(localStorage.getItem('gh_island_' + slug));
+    const graph  = JSON.parse(localStorage.getItem('gh_graph_' + slug));
+    const parsed = JSON.parse(localStorage.getItem('gh_parsed_' + slug));
+    const yearly = JSON.parse(localStorage.getItem('gh_yearly_' + slug));
     if (island && graph && parsed) return { island, graph, parsed, yearly };
   } catch (_) {}
   return null;
@@ -1781,26 +1966,154 @@ async function load() {
   }).catch(() => {});
 
   // Phase 2b — rival + total FN players (independent, non-blocking)
-  getJSON(API_RIVAL).then(data => {
-    const vals = data.data.values ?? [];
-    _rivalPlayers = vals.length ? vals[vals.length - 1] : 0;
-    renderContext();
-  }).catch(() => {});
+  if (API_RIVAL) {
+    getJSON(API_RIVAL).then(data => {
+      const vals = data.data.values ?? [];
+      _rivalPlayers = vals.length ? vals[vals.length - 1] : 0;
+      renderContext();
+    }).catch(() => {});
+  }
   getText(API_FN_COUNT).then(html => {
     const n = parseFNPlayers(html);
     if (n) { _fnPlayers = n; renderContext(); }
   }).catch(() => {});
 }
 
-// Render cached data immediately so the user never sees a blank screen
-const _cached = loadCache();
-if (_cached) {
-  if (_cached.yearly) yearlyDays = _cached.yearly;
-  render(_cached.island, _cached.graph, _cached.parsed);
+// ── ID DISCOVERY (parse HTML pour trouver l'id numérique) ─
+async function discoverMapId(slug) {
+  const html = await getText(`https://fortnite.gg/island/${slug}`);
+  if (!html) return null;
+  const patterns = [
+    /player-count-graph[^"']*[?&]id=(\d+)/,
+    /data-island-id=['"](\d+)['"]/,
+    /islandId\s*[:=]\s*['"]?(\d+)/,
+    /["']id["']\s*:\s*(\d+)/,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m) return parseInt(m[1]);
+  }
+  return null;
 }
 
-load();
-setInterval(load, REFRESH_MS);
+async function ensureMapId(idx) {
+  const m = MAPS[idx];
+  if (m.id) return true;
+  const id = await discoverMapId(m.slug);
+  if (id) {
+    m.id = id;
+    try {
+      const saved = JSON.parse(localStorage.getItem('mapIds') || '{}');
+      saved[m.slug] = id;
+      localStorage.setItem('mapIds', JSON.stringify(saved));
+    } catch (_) {}
+    return true;
+  }
+  return false;
+}
+
+// ── MAP SELECTION SCREEN ──────────────────────────────
+function showMapSelection() {
+  document.body.classList.add('on-selection');
+  clearInterval(_loadTimer);
+  const grid = document.getElementById('ms-grid');
+  if (!grid) return;
+  grid.innerHTML = MAPS.map((m, i) => {
+    const multTxt = m.multLow === m.multHigh ? `×${m.multLow}` : `×${m.multLow}–${m.multHigh}`;
+    const thumb = m.thumb
+      ? `<img class="ms-thumb" src="${m.thumb}" onerror="this.outerHTML='&lt;div class=&quot;ms-thumb placeholder&quot;&gt;🗺&lt;/div&gt;'" alt="">`
+      : `<div class="ms-thumb placeholder">🗺</div>`;
+    return `
+      <div class="ms-card" onclick="selectMap(${i})">
+        ${thumb}
+        <div class="ms-info">
+          <div class="ms-name">${m.name}</div>
+          <div class="ms-code">${m.slug}</div>
+        </div>
+        <div class="ms-mult">${multTxt}</div>
+      </div>`;
+  }).join('');
+}
+
+async function selectMap(idx) {
+  if (idx < 0 || idx >= MAPS.length) return;
+  selectedMapIdx = idx;
+  localStorage.setItem('selectedMapIdx', String(idx));
+
+  // Reset state quand on change de map (sinon mix entre données)
+  clearInterval(_loadTimer); _loadTimer = null;
+  yearlyDays = null;
+  _lastIsland = null; _lastGraph = null; _lastParsed = null;
+  _todayActualMinutes = null;
+  _rivalPlayers = null; _fnPlayers = null;
+  _loadAttempt = 0;
+
+  document.body.classList.remove('on-selection');
+
+  // Si l'id numérique n'est pas connu, essayer de le découvrir
+  if (!MAPS[idx].id) {
+    document.getElementById('page').innerHTML =
+      `<div class="loading"><div class="spinner"></div>Découverte de la map…</div>`;
+    const ok = await ensureMapId(idx);
+    if (!ok) {
+      document.getElementById('page').innerHTML = `
+        <div class="error-box">
+          Impossible de découvrir l'ID de la map<br>
+          <small>fortnite.gg/island/${MAPS[idx].slug}</small><br><br>
+          Les proxies sont peut-être bloqués. Réessaie quand ils marchent ou ajoute manuellement l'id dans le code.
+          <button onclick="selectMap(${idx})"
+            style="margin-top:12px;padding:8px 20px;border:none;border-radius:8px;
+                   background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
+            Réessayer
+          </button>
+        </div>`;
+      return;
+    }
+  }
+
+  // Restaurer les caches éventuels + charger
+  applyMapConfig();
+  const _cached = loadCache();
+  if (_cached) {
+    if (_cached.yearly) yearlyDays = _cached.yearly;
+    render(_cached.island, _cached.graph, _cached.parsed);
+  } else {
+    document.getElementById('page').innerHTML =
+      `<div class="loading"><div class="spinner"></div>Chargement…</div>`;
+  }
+  load();
+  _loadTimer = setInterval(load, REFRESH_MS);
+}
+
+function backToMaps() {
+  selectedMapIdx = -1;
+  localStorage.setItem('selectedMapIdx', '-1');
+  showMapSelection();
+}
+
+// ── BOOT ──────────────────────────────────────────────
+let _loadTimer = null;
+
+if (selectedMapIdx < 0) {
+  // Pas de map sélectionnée → écran de sélection
+  showMapSelection();
+} else {
+  // Map sélectionnée → dashboard direct
+  applyMapConfig();
+  if (MAPS[selectedMapIdx].id) {
+    const _cached = loadCache();
+    if (_cached) {
+      if (_cached.yearly) yearlyDays = _cached.yearly;
+      render(_cached.island, _cached.graph, _cached.parsed);
+    }
+    load();
+    _loadTimer = setInterval(load, REFRESH_MS);
+  } else {
+    // ID inconnu (nouvelle map jamais découverte) — déclencher selectMap
+    // qui s'occupe de la découverte avant de lancer load()
+    selectMap(selectedMapIdx);
+  }
+}
 
 // ── CLOCK (live, updates every second) ───────────────
 function tickClocks() {
