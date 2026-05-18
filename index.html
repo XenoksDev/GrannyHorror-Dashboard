@@ -819,6 +819,7 @@ let _lastIsland = null, _lastGraph = null, _lastParsed = null;
 let _todayActualMinutes = null; // today's player-minutes from the 1d graph, midnight-to-now
 let _rivalPlayers = null;       // live rival map player count
 let _fnPlayers    = null;       // total fortnite players right now
+let _lifetimeMid  = null;       // gain lifetime estimé (mid) — pour sanity check vs mois
 // Paris date for initial state
 const _p = new Intl.DateTimeFormat('en-US', { timeZone:'Europe/Paris', year:'numeric', month:'numeric' }).formatToParts(new Date());
 let selectedMonth = parseInt(_p.find(x => x.type === 'month').value) - 1;
@@ -1602,7 +1603,26 @@ function renderMonthly() {
   const prevDisabled = selectedMonth === 0 && selectedYear <= now.year - 1;
   const nextDisabled = isCurrentMonth;
 
+  // Sanity check : si "ce mois-ci" dépasse le lifetime, c'est que les données
+  // graph viennent d'une autre map (ID numérique faux). On propose un reset.
+  const monthMid = (monthTotalLow + monthTotalHigh) / 2;
+  const idMismatch = _lifetimeMid !== null && monthMid > _lifetimeMid * 1.05; // 5% tolérance
+  const warningBar = idMismatch ? `
+    <div style="background:#2a1010;border:1px solid #5a1f1f;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.4">
+      <div style="color:#ef9a9a;font-weight:700;margin-bottom:4px">⚠ Données incohérentes</div>
+      <div style="color:#999">
+        Ce mois (${moneyV(monthTotalLow, monthTotalHigh)}) dépasse le total lifetime (${money(_lifetimeMid)}).
+        L'ID numérique de cette map est probablement faux → on récupère le graphique d'une autre map.
+      </div>
+      <button onclick="resetMapId(${selectedMapIdx})"
+        style="margin-top:8px;padding:6px 12px;border:none;border-radius:6px;
+               background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:11px">
+        Réinitialiser l'ID de cette map
+      </button>
+    </div>` : '';
+
   document.getElementById('monthly-section').innerHTML = `
+    ${warningBar}
     <div class="monthly-card">
       <div class="month-nav">
         <button class="month-btn" onclick="changeMonth(-1)" ${prevDisabled ? 'disabled' : ''}>‹</button>
@@ -1673,6 +1693,7 @@ function render(island, graph, parsed) {
   const totalMinutes  = parsed.totalMinutes ?? 0;
   const totalEarnLow  = totalMinutes * RATE * mLow;
   const totalEarnHigh = totalMinutes * RATE * mHigh;
+  _lifetimeMid        = totalMinutes ? totalMinutes * RATE * ((mLow + mHigh) / 2) : null;
 
   const perHourLow  = currentPlayers * 60 * RATE * mLow;
   const perHourHigh = currentPlayers * 60 * RATE * mHigh;
@@ -1983,11 +2004,14 @@ async function load() {
 async function discoverMapId(slug) {
   const html = await getText(`https://fortnite.gg/island/${slug}`);
   if (!html) return null;
+  // Patterns ciblés sur l'API player-count-graph (la plus fiable).
+  // On évite les regex génériques type "id": \d+ qui matchent n'importe
+  // quel champ JSON (catégorie, créateur, etc.) et donnent un faux ID.
   const patterns = [
     /player-count-graph[^"']*[?&]id=(\d+)/,
+    /\/island\?id=(\d+)/,
     /data-island-id=['"](\d+)['"]/,
     /islandId\s*[:=]\s*['"]?(\d+)/,
-    /["']id["']\s*:\s*(\d+)/,
   ];
   for (const re of patterns) {
     const m = html.match(re);
@@ -2114,6 +2138,28 @@ function setManualId(idx) {
     saved[MAPS[idx].slug] = id;
     localStorage.setItem('mapIds', JSON.stringify(saved));
   } catch (_) {}
+  selectMap(idx);
+}
+
+// Permet de réinitialiser l'ID auto-découvert d'une map (s'il est faux)
+// puis relance la découverte au prochain selectMap.
+function resetMapId(idx) {
+  const m = MAPS[idx];
+  if (!m) return;
+  // Ne pas reset l'ID d'une map dont le code source dit explicitement l'id
+  // (Survive Granny). On vérifie via l'objet originel : si l'id était dans
+  // localStorage (pas hardcodé), on peut le retirer.
+  try {
+    const saved = JSON.parse(localStorage.getItem('mapIds') || '{}');
+    if (saved[m.slug]) {
+      delete saved[m.slug];
+      localStorage.setItem('mapIds', JSON.stringify(saved));
+      m.id = null;
+    }
+  } catch (_) {}
+  // Purge le cache de cette map sinon on rerend des données erronées
+  ['gh_island_', 'gh_graph_', 'gh_parsed_', 'gh_yearly_'].forEach(k =>
+    localStorage.removeItem(k + m.slug));
   selectMap(idx);
 }
 
