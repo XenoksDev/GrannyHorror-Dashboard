@@ -2060,11 +2060,24 @@ async function selectMap(idx) {
         <div class="error-box">
           Impossible de découvrir l'ID de la map<br>
           <small>fortnite.gg/island/${MAPS[idx].slug}</small><br><br>
-          Les proxies sont peut-être bloqués. Réessaie quand ils marchent ou ajoute manuellement l'id dans le code.
+          <small style="color:#888">Si les proxies marchent mais le parsing échoue, tu peux entrer l'ID manuellement :</small>
+          <div style="margin-top:10px;display:flex;gap:6px;justify-content:center;align-items:center">
+            <input type="number" id="manual-id-input" placeholder="ID numérique" min="1"
+              style="background:#0d0d0d;border:1px solid #333;color:#fff;border-radius:8px;padding:8px 10px;width:140px;font-size:13px;font-variant-numeric:tabular-nums">
+            <button onclick="setManualId(${idx})"
+              style="padding:8px 14px;border:none;border-radius:8px;
+                     background:var(--green);color:#000;font-weight:700;cursor:pointer;font-size:13px">
+              OK
+            </button>
+          </div>
+          <small style="color:#666;display:block;margin-top:8px">
+            (à trouver dans DevTools sur fortnite.gg : Network → requête player-count-graph → param <code>id=</code>)
+          </small>
+          <br>
           <button onclick="selectMap(${idx})"
-            style="margin-top:12px;padding:8px 20px;border:none;border-radius:8px;
+            style="margin-top:4px;padding:8px 20px;border:none;border-radius:8px;
                    background:#ef5350;color:#fff;font-weight:700;cursor:pointer;font-size:13px">
-            Réessayer
+            Réessayer la découverte auto
           </button>
         </div>`;
       return;
@@ -2089,6 +2102,19 @@ function backToMaps() {
   selectedMapIdx = -1;
   localStorage.setItem('selectedMapIdx', '-1');
   showMapSelection();
+}
+
+function setManualId(idx) {
+  const input = document.getElementById('manual-id-input');
+  const id = parseInt(input?.value);
+  if (!id || id <= 0) { input?.focus(); return; }
+  MAPS[idx].id = id;
+  try {
+    const saved = JSON.parse(localStorage.getItem('mapIds') || '{}');
+    saved[MAPS[idx].slug] = id;
+    localStorage.setItem('mapIds', JSON.stringify(saved));
+  } catch (_) {}
+  selectMap(idx);
 }
 
 // ── BOOT ──────────────────────────────────────────────
